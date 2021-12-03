@@ -1,0 +1,202 @@
+--[[
+座標他各種パラメータをグローバル変数で出力します。
+以前配布していた座標格納スクリプトの別バージョンです。
+中心点の移動や個別オブジェクトのグループ回転にも対応しています。
+
+  ◆全体回転
+  個別オブジェクトや位置を移動させるスクリプトの後に使うと
+  トラックバーの軸回転がグループ制御での軸回転に近い動作をします。
+  中心点を移動させた場合にも同様です。
+
+  ◆info
+  各種座標値と変数名を表示するヘルプです。
+
+  ◆名前
+  変数に固有名を与えます。
+  空欄の場合はレイヤー位置が入ります。
+
+  ■出力する変数について■
+  格子線やトラッキングラインなどの座標で使う場合は
+  GVA.posA
+  などとします。最後のAの部分が「名前」に入力した字になります。
+  例えば名前に AviUtlと入れた場合は
+  GVA.posAviUtl
+  となります。
+
+  日本語など2バイト文字を使うこともできますがその場合は
+  GVA["posあああ"]
+  という形でないと扱えません。あああ の部分が「名前」に入力した文字になります。
+
+
+  個別オブジェクト毎のパラメータは GVA.param にまとまっています。
+  名前にAと入力した場合の例ですが
+  GVA.paramA.pos[index] = {x,y,z} -- 座標
+  GVA.paramA.rot[index] = {rx,ry,rz} -- 回転
+  GVA.paramA.anc[index] = {cx,cy,cz} -- 中心点
+  GVA.paramA.zoom[index] = 拡大率
+  GVA.paramA.alpha[index] = 透明度 (0～1)
+  GVA.paramA.aspect[index] = 縦横比 (-1～1)
+  GVA.paramA.wh[index] = {w,h} --ピクセルサイズ
+  で獲得します。
+  GVA.param の後ろに続く A の部分が「名前」に入力した字です。
+  index はオブジェクトの番号を指定します。 (obj.index+1)
+  (ただし 1 から始まります)
+
+
+
+  出力した座標を使ったスクリプトの例
+
+  --出力した座標位置に画像を複製する
+  local P = GVA.paramA.pos
+  for i=1,#P do
+    obj.draw(unpack( P[i] ))
+  end
+
+  --他のパラメータも呼ぶ場合
+  local P = GVA.paramA
+  for i=1,#P.pos do
+    local x,y,z = unpack( P.pos[i] )
+    obj.draw(x,y,z, P.alpha[i], P.zoom[i], unpack(P.rot[i]))
+  end
+
+]]
+
+
+
+--track0:全体回転,0,1,0,1
+--track1:info,0,1,0,1
+--check0:中心点を座標に含む,1
+--dialog:名前,local name="";reset/chk,local reset=0;座標を合成,local key={};
+
+local ROT = function(x,y,z,rx,ry,rz)
+    local toRad=math.pi/180
+    local x,y,z = x or obj.ox, y or obj.oy, z or obj.oz
+    local rx,ry,rz = rx or obj.rx ,ry or obj.ry,rz or obj.rz
+    rx,ry,rz = rx*toRad,ry*toRad,rz*toRad
+    local x0=x*math.cos(rz)-y*math.sin(rz)
+    local y0=x*math.sin(rz)+y*math.cos(rz)
+    local z0=z*math.cos(ry)-x0*math.sin(ry)
+    return z*math.sin(ry)+x0*math.cos(ry), y0*math.cos(rx)-z0*math.sin(rx), y0*math.sin(rx)+z0*math.cos(rx)
+end
+
+
+local l, id = obj.layer,obj.index+1
+if name=="" then name=obj.layer.."" end
+
+if (GVA==nil) then
+  GVA={}
+end
+
+if (obj.index==0) then
+  GVA[l]={}
+  GVA[l].x={}
+  GVA[l].X={}
+  GVA[l].pos = {}
+  GVA[l].POS = {}
+  GVA[l].anc = {}
+  GVA[l].rot = {}
+  GVA[l].alpha = {}
+  GVA[l].zoom = {}
+  GVA[l].aspect = {}
+  GVA[l].wh = {}
+end
+
+local gv=obj.getvalue
+local zoom,alpha = gv("zoom")*.01 ,gv("alpha")
+local w,h = obj.getpixel()
+local x,y,z = gv("x"),gv("y"),gv("z")
+
+--初めに回転行列で相対座標自体を移動
+if (obj.track0==1) then
+  obj.ox,obj.oy,obj.oz=ROT(obj.ox,obj.oy,obj.oz)
+end
+
+--中心点と相対座標を先に保存
+local cx,cy,cz = obj.cx,obj.cy,obj.cz
+local ox,oy,oz = obj.ox,obj.oy,obj.oz
+
+--出力座標にのみ中心点の移動を相対座標へ加算
+if (obj.check0) then
+  local ncx,ncy,ncz = ROT(cx * zoom,cy * zoom,cz)
+  ox,oy,oz = obj.ox-ncx,obj.oy-ncy,obj.oz-ncz
+  -- obj.ox,obj.oy,obj.oz= ox,oy,oz
+  -- obj.cx,obj.cy,obj.cz = 0,0,0
+end
+
+
+
+local rx,ry,rz = obj.rx,obj.ry,obj.rz
+local pos = {x+ox, y+oy, z+oz}
+local anc = {cx,cy,cz}
+local rot = {rx,ry,rz}
+
+GVA[l].pos[id] = pos
+GVA[l].x[id] = {obj.ox, obj.oy, obj.oz}
+GVA[l].X[id] = {obj.x, obj.y, obj.z}
+GVA[l].anc[id] = anc
+GVA[l].rot[id] = rot
+GVA[l].alpha[id] = alpha * obj.alpha
+GVA[l].zoom[id] = zoom * obj.zoom
+GVA[l].aspect[id] = obj.aspect
+GVA[l].wh[id] = {w,h}
+
+if (obj.index==obj.num-1) then
+  local t={}
+  for i=1,obj.num do
+    t[i*3-2]=GVA[l].pos[i][1]
+    t[i*3-1]=GVA[l].pos[i][2]
+    t[i*3  ]=GVA[l].pos[i][3]
+  end
+  GVA["pos"..name] = t
+end
+
+  GVA["param"..name] = GVA[l]
+
+
+GVA.comp={}
+local arr={}
+if #key>0 then
+local n=0
+for i=1,#key do
+  if obj.getvalue("layer"..key[i]..".x") then
+  	local v=GVA["pos"..key[i]]
+  		for j=1,#v do
+  			arr[j+n]=v[j]
+  		end
+  	n=n+#v
+    end
+  end
+GVA.comp=arr
+GVA["comp"..obj.layer]=arr
+end
+
+
+--表示
+if (obj.track1>0) then
+   obj.alpha=.3
+  obj.setfont("koruri",20)
+    obj.setoption("billboard",3)
+  local t1 = ("x=%.1f\ny=%.1f\nz=%.1f"):format(GVA[l].pos[id][1], GVA[l].pos[id][2], GVA[l].pos[id][3])
+  --obj.load(t1)
+  --obj.cx,obj.cy,obj.cz=0,0,0
+  --obj.draw(ox,oy,oz,.5)
+  obj.setoption("billboard",0)
+  if obj.index==obj.num-1 then
+	obj.alpha=1
+      obj.draw(0,0,0,1,.5)
+    obj.setfont("koruri",20)
+      obj.load("座標の変数名(全体) = GVA.pos<#ff4444>"..name..'  <#> <s14>または<s> GVA["pos<#ff4444>'..name..'<#>"]')
+    obj.draw(0,-150,0,1,1,-gv("rx"),-gv("ry"),-gv("rz"))
+    obj.load("座標の変数名(個別) = GVA.param<#ff4444>"..name.."<#>.pos[index]")
+    obj.draw(0,-100,0,1,1,-gv("rx"),-gv("ry"),-gv("rz"))
+    obj.load("合成座標の名前 = GVA.<#ff4444>comp")
+    obj.draw(0,-50,0,1,1,-gv("rx"),-gv("ry"),-gv("rz"))
+  end
+end
+
+
+if reset==1 or obj.time==obj.totaltime then
+  GVA[l]=nil
+  GVA["all"..name]=nil
+  GVA["pos"..name]=nil
+end

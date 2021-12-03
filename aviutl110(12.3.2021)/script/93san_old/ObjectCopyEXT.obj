@@ -1,0 +1,108 @@
+
+--ゆうきさんの一時保存EXT (extbufer.core と extbuffer.dll)が必要になります
+
+--[[
+
+なにこれ？
+
+Layerで指定したレイヤーオブジェクトをコピーし、PNGにして再配置します。
+テキストレイヤーなどアニメーションが不要なオブジェクトに使うと軽量化に貢献します。
+位置のリンクは対象が非表示でも情報を保持します。
+
+フィルタ込でコピーすることができますが
+アニメーション効果は上手くいかない場合がほとんどです。
+ただし仮想バッファを使用しているアニメーション効果だった場合
+仮想バッファロードにチェックで呼び出せるかもしれません。
+
+※フレームバッファをコピーすることはできません。("別のレイヤーのフレームバッファ"というものが存在しないため)
+本家のカスタムオブジェクト一時保存EXTで可能です。
+
+
+
+使い方の例
+
+
+1 ・ お好きなLayerにObjectCopyEXTを配置し、トラックバーの「Layer」でコピーしたいオブジェクトのあるレイヤーを指定。
+
+2 ・ ObjectCopyEXTで指定したレイヤーにオブジェクトを配置。表示する長さは最低1フレームでもOK
+
+3 ・ このカスタムオブジェクトを表示したい分だけ伸ばす。
+
+4 ・ 画像を変えたい場合は指定したレイヤーに違うオブジェクトを置くだけ。
+
+	重たいプロジェクトではフレームが飛んで保存に失敗することがありますが
+	書き出しには関係ありません。
+]]
+
+--track0:Layer,1,99,1,1
+--track1:座標リンク,0,1,1,1
+--track2:拡大リンク,0,1,1,1
+--track3:透明リンク,0,1,0,1
+--check0:フィルタリンク,0
+--dialog:回転のリンク/chk,local link_rot=1;データクリア/chk,local clear_all=0;仮想バッファロード/chk,local load_temp=0;
+local link_pos=obj.track1
+local link_zoom=obj.track2
+local link_alpha=obj.track3
+local link_rot=link_rot
+local L = obj.track0
+if obj.time==0 then BUFFER[obj.layer]=nil end
+require("extbuffer")
+local gv=obj.getvalue
+local l=obj.layer
+local name = (l.."L")
+if BUFFER==nil then BUFFER={} end
+
+if gv("layer"..L..".x") then
+  if load_temp==1 then 
+  obj.load("tempbuffer")
+  else
+  obj.load("layer",L,obj.check0)
+  end
+        extbuffer.write(name)
+        local L=("layer"..L..".")
+    if link_pos==1 then
+      obj.ox=gv(L.."x")+obj.ox
+      obj.oy=gv(L.."y")+obj.oy
+      obj.oz=gv(L.."z")+obj.oz
+    end
+    if link_zoom==1 then
+      obj.zoom=gv(L.."zoom")/100*obj.zoom
+    end
+    if link_alpha==1 then
+      obj.alpha=gv(L.."alpha")*obj.alpha
+    end
+    if link_rot==1 then
+      obj.rx=gv(L.."rx")+obj.rx
+      obj.ry=gv(L.."ry")+obj.ry
+      obj.rz=gv(L.."rz")+obj.rz
+    end
+
+    BUFFER[l]={obj.ox, obj.oy ,obj.oz,obj.zoom,obj.alpha,obj.rx,obj.ry,obj.rz, obj.cx,obj.cy,obj.cz }
+
+else
+    extbuffer.read(name)
+    if link_pos==1 then
+      obj.ox=BUFFER[l][1]+obj.ox
+      obj.oy=BUFFER[l][2]+obj.oy
+      obj.oz=BUFFER[l][3]+obj.oz
+    end
+    if link_zoom==1 then
+      obj.zoom=BUFFER[l][4]*obj.zoom
+    end
+    if link_alpha==1 then
+      obj.alpha=BUFFER[l][5]*obj.alpha
+    end
+    if link_rot==1 then
+      obj.rx=BUFFER[l][6]+obj.rx
+      obj.ry=BUFFER[l][7]+obj.ry
+      obj.rz=BUFFER[l][8]+obj.rz
+    end
+    obj.cx=BUFFER[l][9]+obj.cx
+    obj.cy=BUFFER[l][10]+obj.cy
+    obj.cz=BUFFER[l][11]+obj.cz
+
+end
+
+
+if obj.totaltime==obj.time then extbuffer.clear(name) BUFFER[l]=nil end
+if clear_all==1 then extbuffer.clear(name) BUFFER=nil end

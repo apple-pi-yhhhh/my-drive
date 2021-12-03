@@ -1,0 +1,104 @@
+
+--[[
+画像に対して多重にエッジ抽出を行い等高線もどきを作ったり
+立体ノイズを生成します。
+輝度差を使うのでノイズフィルタを使う場合は「輝度と乗算」を使用してください。
+]]
+
+--track0:輝度シフト,-100,100,0
+--track1:輝度範囲,0,100,80
+--track2:Z軸ズレ,-5000,5000,0
+--track3:元画像,0,100,0
+--check0:輪郭抽出,1
+--dialog:透過モード[0/3],local ktype=1;数,local num=8;モザイク,local mosaic=0;ﾓｻﾞｲｸ変化度,local mos_am=0;色/col,local col=0xf4b274;色強度,local amount=100;HSV変化度,local hsv={30,-10,0};ぼかし,local blur=0;Zずれタイプ/chk,local ztype=0;透明度boost,local boost=0;輝度範囲を拡張,local expn=0;
+
+hsv = hsv or {30,-10,0}
+local hr  = hsv[1] or 30 
+local sr  = hsv[2] or 0
+local vr  = hsv[3] or 0
+ 
+ ktype = math.min(ktype,3)
+ num = num or 10
+ mosaic = mosaic or 0
+ mos_am = mos_am *.01
+ expn = expn or 100
+
+if(obj.check0)then amount=100 end --輪郭抽出時は抽出前のグラデーション強度を最大に
+
+local range_type = {4696,4696,4600,4600} --暗部透過、明部透過、明暗透過、明暗透過(ぼかしなし)
+local range      =  range_type[ktype+1] * (1+expn*.01)
+
+local key_blur_type  = {0,0,512,512}
+local key_blur       = key_blur_type[ktype+1]
+
+--移動量指定使用時にループする用
+if obj.track0>100 then 
+  obj.track0 = (obj.track0%100)*2 - 100
+end
+
+local threshold = range/2 + range * obj.track0 *.01	--輝度基準
+local range = range/2 * obj.track1*.01*(1+expn*.01)    	--輝度基準から最大±100%でサーチ範囲を拡張
+local Z = obj.track2
+
+blur = blur or 0
+blur = blur*.1
+boost = boost or 0
+boost = math.min(7,boost*.1)
+
+
+
+if col==nil then
+  col = {0xd3f7e9,0xfcf3d2,0xfbcf86,0xfa7f46,0xdd4538} 
+
+elseif not string.find(tostring(col),"table:") then
+
+  if col<0 then
+     col = {obj.getpixel(0,0)}
+  else
+
+     local t={}
+     local h,s,v = HSV(col)
+	for i=1,num do
+		h = (h - hr + (hr*2)/num*i)%360
+		s = math.max(0,math.min(100,(s  + (sr)/num*i)))
+		v = math.max(0,math.min(100,(v  + (vr)/num*i)))
+ 	t[i] = HSV(h , s,  v )
+	end
+    col = t
+ end
+
+end
+ 
+
+
+if obj.track3>0 then obj.draw(0,0,0,1,obj.track3*.01) end
+
+obj.effect() --このスクリプトの下にエフェクトをかけると元画像に影響を与えない、上なら元画像もろとも。
+
+obj.copybuffer("cache:org","obj")
+
+for i=0,num-1 do
+	obj.copybuffer("obj","cache:org")
+        local lum = (threshold + range/2) - (range / num * i)*2
+	local color_t = col[ i%#col + 1]
+
+	
+ 	--ルミナンスキーの前にいろいろエフェクトを仕込むと面白いです
+	obj.effect("モザイク","サイズ",mosaic * ( ( num * (mos_am) )/i ) )
+
+
+	obj.effect("ルミナンスキー","基準輝度",lum,"ぼかし",key_blur,"type",ktype)
+        obj.effect("グラデーション","中心Y",3000,"color",color_t,"blend",0,"強さ",amount)
+
+	if obj.check0 then
+ 	  obj.effect("エッジ抽出","強さ",300,"しきい値",17,"透明度エッジを抽出",1,"color",color_t ) 
+	end
+
+	 obj.effect("ぼかし","範囲",(num-i)/num * blur,"サイズ固定",1) --深度ボケ風演出
+ 
+	local z_ = { (num*.5 - i)/num*Z, i/num * Z}
+ 	      z  = z_[ztype + 1]
+
+	obj.draw(0,0,z ,1,1 + boost)
+ 
+end

@@ -1,0 +1,184 @@
+--[[
+
+ SpotLight(3D) 
+  
+  何らかの図形等に付けてスポットライトもどきを作ります。大量に描画する為重いです。
+  ポイントライトモードもあります。
+  サイズが30程度の小さい円などに付けるのがおススメです。合成モードはスクリーンか加算がいいでしょう。
+  あまり大きいサイズのものにうっり乗せると大変なことに。
+  個別オブジェクトに掛けることも出来ます。
+   
+
+ ○トラックバー設定○
+
+・長さが100で丁度目標に届きます。(目標レイヤが0の場合は画面中央(原点))
+・サイズは拡散初期サイズを決めます。100だと元のオブジェクトと等倍です。
+・広がりは光の広がり具合を決めます。
+・減衰でフェードアウト具合を決定します。完全に消えるようにはできていません。
+
+※[[シャドー光源にチェックをするとこのスクリプトを付けたオブジェクトがシャドーの光源位置として扱えます。
+  カメラにカメラ効果からシャドーを付け、シャドーの光源X,Y,ZをShiftキーを押しながらクリックし、
+  X用@カスタムフレアシャドー用、Y用、Z用…と一つづつ移動方法を変更してください。
+  詳しくはrikkyさんのカスタムフレア スクリプト_カメラ対応ver ( http://www.nicovideo.jp/watch/sm25408738 )をどうぞ。]]
+  --申し訳有りませんがこの機能は削除しました 85行目のコメントを有効にすると使えます -- flarez,flarex,flarey=z,x,y
+
+
+ ○ダイアログ設定○
+
+・目標レイヤ    
+   光が向かう方向を他のレイヤーの位置にします。オブジェクトが何もないレイヤーを指定した場合、
+   もしくは目標レイヤが0だと画面中央(原点)固定です。
+   個別オブジェクト時にはテーブル入力でオブジェクト毎にどのレイヤーに向くかを個別に指定できます。
+ 
+・全体を回転 
+   チェックが入っているとトラックバーの軸回転で光を振り回せるようになります。
+   この状態で元の画像自体を回転させたい場合は基本効果から「回転」を付けておくといいかと思います。
+
+・ぼかし
+   ぼかしを追加します。もともと内部でぼかしていますが足りない場合に。-10でカットします。
+
+・グロー強度
+   内部のグロー強度を変更します。やりすぎ注意。0でカットします。
+
+・密度
+   描画密度を指定します。最大を200に制限しています。
+
+・開始位置%
+   描画が始まる位置をずらします。
+
+・自然減衰
+   減衰カーブに自然対数を使います。
+
+・ポイントライトモード
+   発光点だけを作ります。ちょっとリッチな光点を作りたい場合に。
+
+・サイズ制限
+   うっかり大きな画像に適用してしまった場合に動作させないようにします。単位はピクセル(直径)です。 0で制限解除。
+
+]]
+
+@SpotLight(3D)
+--track0:長さ,1,300,50
+--track1:サイズ,0,300,50
+--track2:広がり,1,500,200
+--track3:減衰,1,1000,300
+--dialog:目標レイヤ,local target=0;全体を回転/chk,rotation=1;ぼかし加算,local blur=0;グロー強度%,local intensity=100;密度[max200],local dn=30;開始位置%,local startdistance=0;自然減衰/chk,local fallofftype=1;ポイントライトモード/chk,local pointmode=0;サイズ制限,local limit=100;
+
+obj.setoption("billboard",3)
+obj.setoption("shadow",0)
+if pointmode==0 then 
+ obj.setoption("focus_mode","fixed_size")
+end
+
+local reach     = obj.track0/100   -- 0.1 ~ 3.0
+local startsize = obj.track1/100   -- 0.0 ~ 3.0 
+local width     = obj.track2/10    -- 1.0 ~ 50
+local falloff   = obj.track3/100+1 -- 0.1 ~ 3.0
+      width     = width * reach
+      startdistance = startdistance or 0
+      startdistance = math.min(1,startdistance/100)
+      dn = dn or 30
+      dn = math.min(dn,200)
+
+local x,y,z = obj.x+obj.ox, obj.y+obj.oy, obj.z+obj.oz
+
+-- flarez,flarex,flarey=z,x,y
+
+local gv=obj.getvalue
+local rx,ry,rz = gv("rx"), gv("ry"), gv("rz")
+local px,py,pz= 0,0,0
+local number_=0
+
+if not string.find(tostring(target),"table:") then
+ number_=1
+ target={target}
+end
+
+if(obj.num>#target and number_==1)then
+ for i=1,obj.num-#target do
+  table.insert(target,target[1])
+ end
+end
+
+local Layer=0
+if target[1]~=0 then
+  for k,v in ipairs(target) do
+  if k==obj.index+1 then
+     Layer=v
+  end
+ end
+end
+
+Layer="layer"..Layer.."."
+px,py,pz=gv(Layer.."x"),gv(Layer.."y"),gv(Layer.."z")
+if px==nil then px,py,pz= 0,0,0 end
+
+
+   local ROT = function(x,y,z,rx,ry,rz)
+   local sin,cos,rad,gv=math.sin,math.cos,math.rad,obj.getvalue
+   if not rx then rx,ry,rz=rad(gv("rx")), rad(gv("ry")), rad(gv("rz")) end
+   local function Rx(x,y,z,ang) return x                     ,y*cos(ang)-z*sin(ang), y*sin(ang)+z*cos(ang) end
+   local function Ry(x,y,z,ang) return x*cos(ang)+z*sin(ang) ,y                    ,-x*sin(ang)+z*cos(ang) end
+   local function Rz(x,y,z,ang) return x*cos(ang)-y*sin(ang) ,x*sin(ang)+y*cos(ang), z                     end
+   local X,Y,Z
+   X,Y,Z=Rz(x,y,z,rz)
+   X,Y,Z=Ry(X,Y,Z,ry)
+   X,Y,Z=Rx(X,Y,Z,rx)
+   return X,Y,Z
+   end
+
+
+if pointmode==1 then 
+ px,py,pz=x,y,z 
+ dn=dn / 3
+ reach=reach * 5
+end
+
+local w,h = obj.getpixel()
+local s =math.sqrt(w*w+h*h)
+ 
+ limit = limit or 100
+ limit = limit*1.41421
+
+if(s>limit and limit~=0)then
+ if obj.index==0 then
+  obj.setfont("メイリオ",20,0,0xffffff)
+  obj.load("画像サイズが大きすぎる可能性があります\n元画像のサイズを小さくするか\nサイズ制限設定を変更して下さい。(0で無制限)")
+  obj.draw(0,0,0,.8*100/gv("zoom"),.9)
+ end
+
+else
+
+ obj.effect()
+ if blur>-10 then
+ obj.effect("ぼかし","範囲",s/4+blur)
+ end
+ 
+ intensity=intensity/100
+ if intensity~=0 then
+  obj.effect("グロー","強さ",intensity+40+20/s,"しきい値",0,"拡散",10)
+ end
+ 
+
+for i=startdistance,1,1/dn do
+  local d   = i^2 * reach
+  local zm  = i^2 * width + startsize
+  local alp = 1-i
+   if fallofftype==0 then
+     alp = 1/(1+i*falloff)^2
+   elseif fallofftype==1 then
+     alp = 1/math.exp(i*falloff)
+   end
+ 
+  local ix,iy,iz = (px-x)*d,(py-y)*d,(pz-z)*d
+  local irx,iry,irz = 0,0,0
+
+    if rotation==1 then
+      ix,iy,iz = ROT(ix,iy,iz)
+      irx,iry,irz = -rx,-ry,-rz
+    end
+ obj.draw(ix,iy,iz,zm,alp,irx,iry,irz)
+end
+
+
+end

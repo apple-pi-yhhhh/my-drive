@@ -1,0 +1,226 @@
+--[[
+
+多角形マスクのような何かです
+頂点がフォーカス枠(点線の四角い枠の事です)をはみ出るとその分変形します。
+
+scale
+  頂点のスケールを変更します。
+
+回転
+  頂点位置を回転します。
+  アンカーポイント自体は見た目上動きません。
+
+重心変更
+  ポリゴンの中心位置を変更します。
+  ０だとオブジェクト原点、1だとすべての頂点の重心になります。
+
+audio
+  音声があれば各頂点が音に合わせて移動します。
+
+チェックボックス
+  仮想バッファを使用します。仮想バッファのサイズは頂点位置で可変です。
+
+
+頂点固定
+  アンカーポイントを使用しないモードです。
+  単純な多角形になります。
+
+頂点数
+  最大16、頂点固定だと無制限です(一応max1024)。
+
+音平均化
+  2以上だと音に対する反応が滑らか&鈍くなります。(最大は6)
+
+ﾊﾞｯﾌｧｻｲｽﾞ固定
+  仮想バッファのサイズをスクリーンサイズに固定します。
+
+]]
+--track0:scale,0,400,100
+--track1:回転,-360,360,0
+--track2:audio,-200,200,0
+--track3:重心変更,0,1,0,1
+--check0:仮想バッファ,0
+--dialog:pos,pos={200,0,142,142,0,200,-142,142,-200,0,-142,-142,0,-200,142,-142};頂点固定/chk,N=0;頂点数,n_=8;音平均化,a_=3;ﾊﾞｯﾌｧｻｲｽﾞ固定/chk,k_=0;info/chk,f_=0;
+
+local no_anchor = N
+N = nil
+
+local num  = (n_ or 8)
+if no_anchor==0 then
+  if num>16 then num=16 end
+end
+if num>1024 then num=1024 end
+if num<3 then num=3 end
+n_ = nil
+
+local ave = (a_ or 3)
+if ave>6 then ave=6 end
+a_ = nil
+
+local info = f_
+f_ = nil
+
+local buff_size = k_
+k_ = nil
+
+
+
+local audio = obj.track2*.01
+
+local t={}
+for i=1,num do
+  t[i]=0
+end
+
+if audio~=0 then
+  local AudioAve = function (size,range,Type)
+      local size = size or 1
+      local range = range or 3
+      local Type=Type or "spectrum"
+      local buf={}
+      local L=obj.layer
+      local num=obj.getaudio(buf,"audiobuffer",Type,size)
+      if(obj.index==0)then
+        if(GA_buf==nil)then GA_buf={} end
+        if(GA_buf[L]==nil)then GA_buf[L]={} end
+      end
+
+      if(range<2)then
+        GA_buf[L]=nil
+        return buf ,num
+
+      else
+
+        if(obj.index==0)then
+          table.insert(GA_buf[L],buf)
+          if(#GA_buf[L]>range)then
+            table.remove(GA_buf[L],1)
+          end
+          if(#GA_buf[L]>range+1)then
+            GA_buf[L]={}
+          end
+        end
+
+        local V={}
+        for i=1,num do
+            local t=0
+            for j=0,range-1 do
+              t=t + GA_buf[L][range-j][i]
+            end
+            V[i]=t/range
+        end
+        return V
+        end
+    end
+
+    t = AudioAve(num,ave)
+  --obj.getaudio(t,"audiobuffer","spectrum",num)
+end
+
+
+
+
+local scale = obj.track0*.01
+local rot   = math.pi/180*obj.track1
+local bcl   = obj.track3
+local alpha=1.5 --仮想バッファ以外では隙間ができるので (アンチエイリアスは切らない方向)
+local X,Y = 0,0 --仮想バッファサイズ
+local xx,yy = 0,0 --重心
+local pw,ph=obj.getpixel()
+if (no_anchor==1) then
+  pos={}
+
+  local chk = (obj.check0 and 2) or 1
+  local w = {obj.w/2,pw/2}
+  local h = {obj.h/2,ph/2}
+  -- local S = math.sqrt(w[chk]*w[chk] + h[chk]*h[chk])
+  local s=math.pi*2/num
+  for i=0,num-1 do
+    -- local W = w[chk] + (w[chk] * t[i+1]*.001)*audio
+    -- local H = w[chk] + (w[chk] * t[i+1]*.001)*audio
+    pos[i*2+1] = math.cos(s*i) * scale *w[chk] --* S
+    pos[i*2+2] = math.sin(s*i) * scale *h[chk] --* S
+  end
+
+else
+
+  obj.setanchor("pos",num,"loop")
+
+end
+
+for i=1,num do
+  local x,y  = pos[i*2-1],pos[i*2]
+  local at   = math.atan2(y,x)
+  local r    = math.sqrt(x*x+y*y)
+        r = r + (r * t[i]*.001)*audio
+        x = math.cos(at+rot) * scale * r
+        y = math.sin(at+rot) * scale * r
+        pos[i*2-1] = x
+        pos[i*2]   = y
+        xx = xx+x
+        yy = yy+y
+  if obj.check0 then
+    X = math.max(math.abs(x*2),X)
+    Y = math.max(math.abs(y*2),Y)
+  end
+end
+
+
+local w,h
+
+if obj.check0 then
+  alpha=1
+  w,h = obj.getpixel()
+
+  if buff_size==1 then
+    X,Y = obj.screen_w,obj.screen_h
+  else
+    X=math.ceil(X-X%2)
+    Y=math.ceil(Y-Y%2)
+  end
+
+  obj.setoption("drawtarget","tempbuffer",X ,Y )
+  obj.setoption("blend","alpha_add")
+else
+  obj.effect()
+  w,h = obj.w,obj.h
+end
+
+xx = xx/num
+yy = yy/num
+
+if bcl==0 then
+  xx=0
+  yy=0
+end
+
+w,h = w/2,h/2
+
+for i = 1,num do
+  local j=i%num+1
+  local u0,v0 = pos[i*2-1],pos[i*2]
+  local u1,v1 = pos[j*2-1],pos[j*2]
+  obj.drawpoly(u0,v0,0, u1,v1,0, xx,yy,0, xx,yy,0, u0+w,v0+h,u1+w,v1+h,w,h,w,h,alpha)
+end
+
+if info==1 then
+  -- obj.copybuffer("obj","tmp")
+  -- obj.setoption("drawtarget","framebuffer")
+  obj.setoption("blend",0)
+  obj.setfont("koruri",14)
+  for i=1,num do
+    obj.load("figure","円",0x444444,30)
+    obj.draw(pos[i*2-1],pos[i*2],0,.8,1)
+    obj.load(i)
+    obj.draw(pos[i*2-1],pos[i*2])
+    if i==8 then
+      obj.load("figure","円",0xff4444,30)
+      obj.draw(xx,yy)
+    end
+  end
+end
+
+if obj.check0 then
+  obj.copybuffer("obj","tmp")
+  obj.setoption("blend",0)
+end

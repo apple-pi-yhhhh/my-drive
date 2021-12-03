@@ -1,0 +1,66 @@
+
+@ˆø‚«‰„‚Î‚µ
+--track0:ˆÊ’u,0,2000,0
+--track1:‰ñ“],-360,360,0
+--track2:Šg’£,0,2000,0
+local L=obj.track0
+local rot=-obj.track1
+local expand=obj.track2
+local w,h=obj.getpixel()
+
+--if not(rot==0 or rot==-360 or rot==360)then
+ w=math.sqrt(w^2+h^2)
+ obj.setoption("drawtarget","tempbuffer",w,w)
+ obj.draw(0,0,0,1,1,0,0,rot)
+ obj.copybuffer("obj","tmp")
+--end
+
+obj.effect("ƒNƒŠƒbƒsƒ“ƒO","ã",L)
+obj.effect("—ÌˆæŠg’£","“h‚è‚Â‚Ô‚µ",1,"ã",L+expand)
+obj.rz=-rot+obj.rz
+
+
+
+
+@ˆø‚«‰„‚Î‚µ(©“®)
+--track0:c,0,100,100
+--track1:‰¡,0,100,100
+--track2:Šg’£,0,1000,100
+--track3:•Ï‰»ŠÔ,0,1000,10
+--check0:‰ñ“]ƒ‰ƒ“ƒ_ƒ€,0
+--dialog:seed,local seed=0;
+local vertical, horizontal,expand,smooth =obj.track0,obj.track1,obj.track2/100,obj.track3
+
+local function shake(interval,min,max,seed)
+if interval==0 then 
+return rand(min,max,seed)
+else
+local s=seed
+min,max=min*1000,max*1000
+local t = obj.time*100/interval
+local p = math.floor(t)
+t = t-p
+local x0 = rand(min,max,s,p+0)/1000
+local x1 = rand(min,max,s,p+1)/1000
+local x2 = rand(min,max,s,p+2)/1000
+local x3 = rand(min,max,s,p+3)/1000
+return obj.interpolation(t,x0,x1,x2,x3)
+end
+end
+
+local hz=shake(smooth,0,1,obj.index)*horizontal*0.01
+local vt=shake(smooth,0,1,obj.index)*vertical*0.01
+local w,h=obj.getpixel()
+
+local tl = {"ã", "‰º", "¶", "‰E"}
+local T,L =tl[obj.rand(1,2,seed,obj.index)],tl[obj.rand(3,4,seed,obj.index)]
+local ww=obj.rand(0,w-1,seed,obj.index)*hz 
+local hh=obj.rand(0,h-1,seed,obj.index)*vt
+obj.effect("ƒNƒŠƒbƒsƒ“ƒO", T, hh, L, ww)
+obj.effect("—ÌˆæŠg’£","“h‚è‚Â‚Ô‚µ", 1,T, hh * expand, L,ww * expand)
+
+if(obj.check0)then
+local rot={0, 90, 180, 270}
+obj.rz=rot[rand(1,4,seed,obj.index)]+obj.rz
+end
+

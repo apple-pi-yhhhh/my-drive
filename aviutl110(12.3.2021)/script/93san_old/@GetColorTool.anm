@@ -1,0 +1,170 @@
+--[[
+
+個別オブジェクト用のスクリプトです。
+GetColorで座標を出力している場合、これを付けると位置をリンクさせる事が可能です。
+座標指定にGetColorを使用しているレイヤーの番号をテーブルで入力します。 例 {4,5,6} 
+トラックバー進行度の移動でぬるっと移動します。
+またこれ自身の位置も 「GC.poslink」  という変数で出力しています。
+
+■トラックバー■
+	進行度     >> 100進むごとに次の座標へ移動します。（ループします）
+	元の位置   >> 100にすると進行度に関わらず元の位置へ戻ります。
+	色強度     >> 移動先の色で塗ります。
+	位置ズラシ >> おまけ、文字位置を循環するようにずらしますが
+	     	      進行度を変化させた場合にはシームレスに繋がらないです。
+
+■ダイアログ設定■	      
+	基準座標打消し >> 基準座標の移動を無視します。
+	色もずらす     >> ずらした位置の色と同じにします。
+	色ズラシ加算   >> 色の位置のみずらします。
+	間隔           >> リンクする座標を一つ飛ばしにします。進行度を変化させた場合にはシームレスに繋がらないです。
+	Random         >> ランダムな位置にリンクします。進行度を変化させた場合にはシームレスに繋がらないです。
+
+
+◆Tips◆ 
+	三角形や丸などにGetColorを使って座標を出力し、このスクリプトでリンクすることで
+	テキストを様々な形状に並べることが出来ます。大きな文字には適していませんが。
+
+	GetColorで一度「座標を出力にチェック」するとチェックを外さなければ情報が残ります。
+	なので色や配置だけ記録してオブジェクトそのものは無効にしてしまうのも有効です。
+	ただエラーが出たり、AviUtlを再起動すると消えるので過信は禁物です。レイヤーで振り分けなので上書きもされます。
+
+]]
+
+
+
+---------------------------------------------------------------------------------------------
+
+@GetColorTextlink
+
+---------------------------------------------------------------------------------------------
+
+--track0:進行度,0,1000,0
+--track1:元の位置,0,100,0
+--track2:色強度,0,100,0
+--track3:位置ズラシ,0,5000,0,1
+--check0:基準座標打消し,0
+--dialog:座標指定,local gcpos={};色もずらす/chk,local shiftcol=0;色ズラシ加算,local shiftcol_add=0;間隔,local space=0;Random,local rnd=0;
+
+
+--座標指定が無い場合はあるもの全部収める(ただし無作為)
+
+if(gcpos==nil or #gcpos==0 and GC)then
+ gcpos={}
+ for k,v in pairs(GC) do
+ local K=string.match(k,"%d",4)
+   table.insert(gcpos,K)
+ end
+ end
+
+local ox,oy,oz = obj.ox-obj.cx*obj.getvalue("zoom")*0.01,  obj.oy-obj.cy*obj.getvalue("zoom")*0.01,   obj.oz
+local x,y,z = 0,0,0
+if(obj.check0)then x,y,z = obj.x,obj.y,obj.z end
+
+local org1 = (1-obj.track1*0.01)
+local org2 = (  obj.track1*0.01)
+
+local t=obj.track0*0.01
+
+local l =#gcpos
+local M,F=math.modf(t)
+local A = gcpos[(M  )%l+1]
+local B = gcpos[(M+1)%l+1]
+local c1 = (1-F)^1.5
+local c2 = (  F)^1.5
+
+local T = {}
+
+local P1 = GC["pos"..A]
+local P2 = GC["pos"..B]
+local n = math.max(#P1,#P2)/3
+ 
+--GC.pos は　{x,y,z,x,y,z,x,y,z,...}
+
+
+for i = 1, n do
+
+	local X,Y,Z=i*3-2, i*3-1, i*3
+	
+	local x1,y1,z1 = P1[X] or ox,  P1[Y] or oy,  P1[Z] or oz
+		--local x1,y1,z1 = P1[X] or P2[X] ,P1[Y] or P2[Y] ,P1[Z] or P2[Z]
+	local x2,y2,z2 = P2[X] or ox,  P2[Y] or oy,  P2[Z] or oz
+		--local x2,y2,z2 = P2[X] or P1[X],P2[Y] or P1[Y],P2[Z] or P1[Z]
+	
+	local x0 = x1*c1 + x2*c2
+ 	local y0 = y1*c1 + y2*c2
+ 	local z0 = z1*c1 + z2*c2
+
+	T[X] = x0
+	T[Y] = y0
+	T[Z] = z0
+
+end
+
+
+local id  = obj.index
+
+		--[[
+		if(sub==nil)then sub=0 end
+			if(sub~=0)then
+			sub = sub - 1
+			id  = math.floor(n/(obj.num+sub) ) * id
+			end
+		]]
+
+
+if(space==nil)then space=0 end
+	if(space~=0)then
+	space=math.floor(space)
+	id = id*(space+1)
+	end
+
+if(rnd==nil)then rnd=0 end
+	if(rnd~=0)then
+	rnd = math.floor(rnd)
+	id = rand(1,#T/3,rnd,0)
+	end
+
+
+      id  = math.floor(id+obj.track3)%(#T/3) + 1
+
+
+obj.ox = (T[id*3-2]-x)*org1 + obj.ox*org2
+obj.oy = (T[id*3-1]-y)*org1 + obj.oy*org2
+obj.oz = (T[id*3-0]-z)*org1 + obj.oz*org2
+
+
+
+--色の交換
+local COL = function(t ,col0 ,col1)
+  local r0,g0,b0=RGB(col0)
+  local r1,g1,b1=RGB(col1)
+  local r = math.floor(r0 + (r1-r0) * t)
+  local g = math.floor(g0 + (g1-g0) * t)
+  local b = math.floor(b0 + (b1-b0) * t)
+  return RGB(r,g,b)
+end
+
+if shiftcol==1 then
+id = id-1
+else
+id = obj.index
+end
+
+if(shiftcol_add==nil)then shiftcol_add=0 end
+shiftcol_add = math.floor(shiftcol_add)
+id = id + shiftcol_add
+
+local Col1 = GC["col"..A]
+local Col2 = GC["col"..B]
+local col =  COL(F,Col1[id%(#Col1)+1],Col2[id%(#Col2)+1])
+obj.effect("単色化","color",col,"輝度を保持する",0,"強さ",obj.track2)
+
+
+
+if obj.index==0 then MM={} end
+
+table.insert(MM,obj.ox+obj.x);table.insert(MM,obj.oy+obj.y);table.insert(MM,obj.oz);
+GC.poslink=MM
+
+if obj.index==obj.num-1 then MM=nil end

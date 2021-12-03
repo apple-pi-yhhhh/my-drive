@@ -1,0 +1,203 @@
+--track0:横数,2,40,10,1
+--track1:縦数,2,40,10,1
+--track2:サイズ,-500,500,100
+--track3:ズレ,-360,360,0
+--dialog:音影響,local am_audio=10;音平均化数,local ave=3;ポリゴンサイズ,local p_size=0;color(空欄で自動)/col,local col=0xffffff;点サイズ,local point_size=10;ランダム度,local rand_am=0;カメラ影響度,local cam_am=100;
+
+
+local DPsphere= function(p0,p1,p2,p3,uv,alpha,col,scale)
+	obj.load("figure","四角形",(col or 0xfffffff),1)
+	local s = scale or 1
+	local x0,y0,z0,a0,d0  = unpack(p0)
+	local x1,y1,z1,a1,d1  = unpack(p1)
+	local x2,y2,z2,a2,d2  = unpack(p2)
+	local x3,y3,z3,a3,d3  = unpack(p3)
+	local s0= 1 +  d0*s
+	local s1= 1 +  d1*s
+	local s2= 1 +  d2*s
+	local s3= 1 +  d3*s
+	x0,y0,z0 = x0*s0,y0*s0,z0*s0
+	x1,y1,z1 = x1*s1,y1*s1,z1*s1
+	x2,y2,z2 = x2*s2,y2*s2,z2*s2
+	x3,y3,z3 = x3*s3,y3*s3,z3*s3
+	local uv=uv or {0,0, 0,0, 0,0, 0,0}
+	local u0,v0,u1,v1,u2,v2,u3,v3 = unpack(uv)
+	local alp0 = alpha * math.max(0,math.min(1-a0*a1,1))
+	local alp1 = alpha * math.max(0,math.min(1-a2*a3,1))
+	obj.drawpoly( x0,y0,z0, x1,y1,z1, x2,y2,z2, x2,y2,z2,
+	u0,v0, u1,v1,  u2,v2,  u2,v2,alp0)
+	obj.drawpoly( x0,y0,z0, x2,y2,z2, x3,y3,z3, x3,y3,z3,
+	u0,v0, u2,v2,  u3,v3,  u3,v3,alp1)
+end
+
+local SPC = function(r,phi,theta)
+	local x = math.sin(theta)*math.cos(phi)
+	local z = math.sin(theta)*math.sin(phi)
+	local y = math.cos(theta)
+	return x*r,  y*r,  z*r
+end
+
+
+
+local ROT = function(x,y,z,rx,ry,rz)
+	local toRad=math.pi/180
+	local x,y,z = x or obj.ox, y or obj.oy, z or obj.oz
+     	local rx,ry,rz = rx or obj.rx,ry or obj.ry,rz or obj.rz
+               rx,ry,rz = rx*toRad,ry*toRad,rz*toRad
+	local x0=x*math.cos(rz)-y*math.sin(rz)
+	local y0=x*math.sin(rz)+y*math.cos(rz)
+	local z0=z*math.cos(ry)-x0*math.sin(ry)
+	return z*math.sin(ry)+x0*math.cos(ry),y0*math.cos(rx)-z0*math.sin(rx),y0*math.sin(rx)+z0*math.cos(rx)
+end
+
+
+
+local AudioAve = function (size,range,Type)
+
+	local size = size or 1
+	local range = range or 3
+	local Type=Type or "spectrum"
+	local buf={} 
+	local L=obj.layer
+	local num=obj.getaudio(buf,"audiobuffer",Type,size)
+
+	if(range<2)then 
+		return buf ,num --rangeが1以下だと普通のobj.getaudioを返して終わり。
+	else
+
+	if(obj.index==0)then
+		if(GA_buf==nil)then GA_buf={} end
+		if(GA_buf[L]==nil)then GA_buf[L]={} end
+
+	--if obj.time>GA_buf.time then
+ 	 table.insert(GA_buf[L],buf)
+	--end
+
+	if(#GA_buf[L]>range)then
+	 table.remove(GA_buf[L],1)
+	end
+
+	if(#GA_buf[L]>range+1)then
+	 GA_buf[L]={} 
+	end
+
+	end
+
+	
+
+	local V={} 
+	for i=1,num do 
+	local t=0
+	for j=0,range-1 do 
+	t=t + GA_buf[L][range-j][i]
+	end
+	V[i]=t/range
+	end
+	--GA_buf.time = obj.time
+	if(obj.time == obj.totaltime) then GA_buf=nil end
+
+	return V,num,(#GA_buf[L][1])
+	end
+end
+
+
+
+--DOF(カメラモード,ブラー強度,  焦点距離, 絞り, 自分の位置(テーブル),ブラー最大値)
+
+local DDOF = function(mode,blur,focalpoint,aperture,pos,limit)
+
+	local gv=obj.getvalue
+	local mode = mode or 0
+	local blur = blur or 0
+	local focalpoint = focalpoint or 0
+	local aperture = aperture or 100
+	aperture = 1- aperture *.01
+	local pos = pos
+
+	if pos==nil then
+	pos = {
+	obj.x+obj.ox - obj.cx*gv("zoom")*.01,
+	obj.y+obj.oy - obj.cy*gv("zoom")*.01,
+	obj.z+obj.oz - obj.cz*gv("zoom")*.01
+	}
+	end
+
+	local cam = obj.getoption("camera_param")
+	local C = math.sqrt((cam.x - pos[1])^2+(cam.y - pos[2])^2+(cam.z - pos[3] )^2)
+	local E = math.sqrt((cam.tx-cam.x)^2+(cam.ty-cam.y)^2+(cam.tz-cam.z)^2)                     		
+	local D = C-E
+	local I = 1024 or cam.d
+	local p =  ( D - focalpoint) / I 
+	if(mode==0)then
+	      p =  ( D - focalpoint - I + C ) / I 
+	end
+
+	local a = math.abs(p) 
+	      a = -(aperture-a)
+	if(a<0)then a=0 end
+
+	local blur_type="レンズブラー"
+	if(blur<0)then blur_type="ぼかし" end
+	blur=math.abs(blur)
+	local coc =  blur*a
+
+	if limit then
+	local limit=math.max(blur,limit)
+	   if coc>limit then
+	    coc = limit
+	end
+	end
+
+	if (obj.alpha>0 and blur~=0) then
+	obj.effect(blur_type, "範囲", coc ,"サイズ固定",0)
+	end
+
+	return a,p
+end
+
+-------------------------------
+
+local cam_am = cam_am*.01
+local pi=math.pi
+local xn,yn=obj.track0,obj.track1
+local AU=AudioAve(math.floor(xn*1)+1,(ave or 3))
+local T={}
+for i=0,xn do
+T[i]={}
+for j= 0,yn-1 do
+local a= (AU[i+1]/1000)* am_audio*.01 + 1
+local ra = rand(0,100,i,i+j)
+if rand_am<0 then ra = rand(0,-100,i,i) end
+local r=obj.track2 + ra*rand_am*.01--+ math.sin(AU[i+1]/60)*40
+local p=pi*1/xn*i + obj.track3*pi/180  
+local t=pi*2/yn*j + (rand(0,100,i,142)/1000 )*rand_am*.01
+local x,y,z =SPC(r,t,p)
+x,y,z=x*a, y*a, z*a
+local mx,my,mz = ROT(x+obj.x,y+obj.y,z+obj.z)
+local alp,ap = DDOF(0,(blur or 0),0,100,{mx,my,mz},10)
+alp= 1-alp*cam_am
+T[i][j] = {x,y,z,alp,ap}
+  --obj.load("i="..i.."\nj="..j)
+  obj.setoption("billboard",3)
+ if i>1 and i<xn then
+obj.load("figure","円",col or HSV(200+AU[i+1]/25, 30+AU[i+1]/23,100),point_size)
+ local x,y,z=ROT(x,y,z)
+ obj.draw(x,y,z,1,alp,-obj.rx,-obj.ry,-obj.rz)
+end
+end
+end
+table.insert(T,T[0])
+ obj.setoption("billboard",0)
+obj.setoption('antialias',1)
+for i=0,#T-1 ,1 do
+for j=0,#T[i],1 do
+local p3 = T[i][j]
+local p2 = T[(i+1)%#T][j]
+local p1 = T[(i+1)%#T][(j+1)%(#T[i]+1)]
+local p0 = T[i][(j+1)%(#T[i]+1)]
+local ap = T[i][j][4]
+local COL = col or HSV(ap*36+200+AU[i+1]/45, 30+AU[i+1]/23,100)
+  DPsphere(p0,p1, p2, p3, nil,1,COL, p_size*.01 + (AU[i+1]/1000)*0)
+end
+end
+ 

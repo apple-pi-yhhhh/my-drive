@@ -1,0 +1,15 @@
+--[[
+   「カメラ目標指定」スクリプトをカメラにかけており、「目標レイヤ」が0の場合
+   このスクリプトを掛けたオブジェクトが自動的にカメラ目標になります。
+   レイヤーを移動しても追従するのでnullオブジェクト代わりに。  
+   回転のロックが主な目的です。
+]]
+
+@カメラ目標化
+--check0:回転をロック,1
+CamNullOption=obj.layer
+if obj.check0  then 
+obj.rz=obj.rz-obj.getvalue("rz")
+obj.ry=obj.ry-obj.getvalue("ry")
+obj.rx=obj.rx-obj.getvalue("rx")
+end

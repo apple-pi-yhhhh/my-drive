@@ -1,0 +1,1400 @@
+------------------------------------------------------------------------------------------------------------------------
+@領域拡張S
+------------------------------------------------------------------------------------------------------------------------
+--track0:上,-2000,2000,0
+--track1:下,-2000,2000,0
+--track2:左,-2000,2000,0
+--track3:右,-2000,2000,0
+--check0:塗りつぶし,1
+--dialog:上下リンク/chk,local UD=0;左右リンク/chk,LR=0;上,local U=0;下,local D=0;左,local L=0;右,local R=0;アンカーを使う/chk,local ANK=1;↑タイプ[0～2],local ANKtype=0;アンカー座標,AP={0,0,0,0};
+
+--[[
+本当に何の変哲もない領域拡張です。基本的に塗りつぶし有で四角形に使うのが主目的です。
+トラックバーマイナスだとクリッピングします
+。
+アンカーを使うとドラッグで長方形を作ります。サイズ2の四角形に使うと良いかと思います。
+アンカーモードの2はカスタムオブジェクトにしたほうが良かったかも知れません。
+
+]]
+
+local U,D,L,R=obj.track0+U,obj.track1+D,obj.track2+L,obj.track3+R
+
+local P
+if obj.check0 then P=1
+else P=0 
+end
+
+
+
+if ANK ==1 then
+
+if ANKtype==2 then
+
+obj.setanchor("AP",2,"star")
+obj.effect("領域拡張",
+"上",-math.min(AP[2],AP[4]),
+"下", math.max(AP[2],AP[4]),
+"左",-math.min(AP[1],AP[3]),
+"右", math.max(AP[1],AP[3]),
+"塗りつぶし",P)
+
+obj.effect("クリッピング",
+"上", math.min(AP[2],AP[4]),
+"下",-math.max(AP[2],AP[4]),
+"左", math.min(AP[1],AP[3]),
+"右",-math.max(AP[1],AP[3]))
+
+elseif ANKtype==1 then
+
+obj.setanchor("AP",1,"star")
+obj.effect("領域拡張",
+"上",math.abs(AP[2]),
+"下",math.abs(AP[2]),
+"左",math.abs(AP[1]),
+"右",math.abs(AP[1]),
+"塗りつぶし",P)
+
+else
+
+obj.setanchor("AP",1,"star")
+obj.effect("領域拡張",
+"上",-AP[2],
+"下", AP[2],
+"左",-AP[1],
+"右", AP[1],
+"塗りつぶし",P)
+end
+end
+
+
+AP=nil
+
+
+if UD==1 then D=U end
+if LR==1 then R=L end
+
+obj.effect("領域拡張",
+"上",U,
+"下",D,
+"左",L,
+"右",R,
+"塗りつぶし",P)
+
+obj.effect("クリッピング",
+"上",-U,
+"下",-D,
+"左",-L,
+"右",-R)
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+@クリッピングS
+------------------------------------------------------------------------------------------------------------------------
+--track0:上,0,4000,0
+--track1:下,0,4000,0
+--track2:左,0,4000,0
+--track3:右,0,4000,0
+--check0:リンク,0
+--dialog:上,local A=0;下,local B=0;左,local C=0;右,local D=0;個別タイプ[1-5],local Type=0;タイプ影響%,local amo=100;seed,local seed=1;交互反転/chk,local REV=0; 
+
+--[[
+上下と左右を其々リンクして上下&左右を同時に動かせるだけです。
+ダイアログは数値入力やスクリプト用。
+
+個別タイプは個別オブジェクトやオブジェクト分割時に
+1-ランダム
+2-順
+3-逆順
+4-凸
+5-凹
+のように動作します。
+
+seedにマイナスの値を入れると音声の影響を受けます(seedが奇数の場合はspectrum、偶数の場合はfourierを使います)
+]]
+
+local w,h=obj.getpixel()
+w,h=w,h
+local min=math.min
+A=A+obj.track0
+B=B+obj.track1
+C=C+obj.track2
+D=D+obj.track3
+
+amo=amo/100
+
+if Type==1 then
+A=amo*A*obj.rand(1000,5000,obj.index*-1*seed,1)/1000
+B=amo*B*obj.rand(1000,5000,obj.index*-2*seed,2)/1000
+C=amo*C*obj.rand(1000,5000,obj.index*-3*seed,3)/1000
+D=amo*D*obj.rand(1000,5000,obj.index*-4*seed,4)/1000
+end
+
+local F=1
+local ID=obj.index*amo
+local num=obj.num*amo
+
+if Type==2 then
+ F=1+ID
+elseif Type==3 then
+ F=1+num-ID
+elseif Type==4 then
+ F=1+math.abs(num/2-ID)
+elseif Type==5 then
+ F=1+(num/2-math.abs(num/2-ID))
+end
+
+local T=0
+if seed<0 then
+ local S={"spectrum","fourier"}
+ local DF={4000,1000}
+ local I={obj.index+1,math.floor((800/obj.num))*(obj.index+1)}
+local f,f,t=obj.getaudio(nil,"audiobuffer",S[math.abs(seed%2-2)],obj.num)
+T=t[I[math.abs(seed%2-2)]] / DF[math.abs(seed%2-2)]
+T=T*amo
+end
+
+A=min(h,A*(F+T))
+B=min(h,B*(F+T))
+C=min(w,C*(F+T))
+D=min(w,D*(F+T))
+
+
+if REV==1 then
+ obj.check0=false
+ if obj.index%2==1 then 
+ A,B=B,A 
+ C,D=D,C 
+end
+end
+
+if obj.check0 then 
+ obj.effect("クリッピング","上",A/2-1,"下",A/2,"左",C/2-1,"右",C/2)
+ local w1,h1=obj.getpixel()
+ if (w1<=1 or h1<=1) then
+  obj.alpha=0
+ end
+
+else
+
+ obj.effect("クリッピング","上",A,"下",B,"左",C,"右",D)
+ local w1,h1=obj.getpixel()
+ if (w1<1 or h1<1) then
+ obj.effect("クリッピング","上",min(h1/2,A)"下",min(h1/2,B),"左",min(w1/2,C),"右",min(w1/2,D))
+ obj.alpha=0
+ end
+end
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+@カメラ自動透過B
+------------------------------------------------------------------------------------------------------------------------
+--track0:フェード,0,5000,100
+--track1:消滅距離,-500,5000,200
+--track2:減衰カーブ,0,2,0,1
+--track3:nil,0,100,0
+--check0:動作反転,0
+--dialog:透明度/chk,local ALP=1;ぼかし,local blur=0;レンズブラー化/chk,local lenz=0;単色化強度,local strength=0;色/col,local col=0xffffff;輝度を保持/chk,local hold=0;cam_A/chk, local A=0;カメラを向く,local bill=0;
+
+--[[
+カメラとの距離で消えたり、ボケたり、色が変わったりします。
+減衰範囲を正確にしました。消滅距離に入ると完全に消えます。(消滅距離が0以下だと完全には消えません。)
+フェードは消滅距離に達するまでの減衰範囲を追加します。
+相変わらず視野角には対応できません。
+
+動作反転で全体の動作が逆になります。
+単色化強度、ぼかしはマイナスの値を入れるとエフェクトの動作が反転します。
+
+備考:cam_Aにチェックを入れると cam_Aと言う変数を吐きます。1から0の範囲で動きます。
+    他のスクリプトなどに利用します。
+]]
+
+if bill==1 then obj.setoption("billboard",3) end
+
+local alpha=1
+local offset=obj.track1
+local limit=math.abs(obj.track1)+math.max(0,obj.track0)
+local floor=math.floor 
+local cam = obj.getoption("camera_param")
+local x,y,z=cam.x+cam.tx ,cam.y+cam.ty ,cam.z+cam.tz
+local X,Y,Z=obj.x+obj.ox,obj.y+obj.oy,obj.z+obj.oz
+local len=((x-X)^2+(y-Y)^2+(z-Z)^2)^0.5
+offset=math.min(offset,limit)
+alpha=(len-limit)/(limit-offset)+1
+alpha=math.max(0,math.min(1,alpha))
+
+  if obj.track2==1 then
+    alpha= (alpha-1)^3 + 1 -- outCubic
+   elseif obj.trakc2==2 then
+    alpha=-(alpha-1)^4 + 1 -- outQuart
+   end
+
+if obj.check0 then  alpha=1-alpha  end
+
+if ALP==1 then  obj.alpha = obj.alpha*alpha  end
+
+
+if obj.alpha>0 then
+
+if blur<0 then
+blur=math.abs(blur)*(alpha)
+else
+blur=math.abs(blur)*(1-alpha)
+end
+
+if lenz==1 then 
+obj.effect("レンズブラー","範囲",blur,"光の強さ",10,"サイズ固定",0)
+else
+obj.effect("ぼかし","範囲",blur,"サイズ固定",0)
+end
+
+
+if strength<0 then
+obj.effect("単色化","強さ",math.abs(strength)*(alpha),"color",col,"輝度を保持する",hold)
+else
+obj.effect("単色化","強さ",math.abs(strength)*(1-alpha),"color",col,"輝度を保持する",hold)
+end
+
+--obj.effect("グロー","強さ",220*(1-alpha),"拡散",12,"ぼかし",4,"しきい値",0)
+--obj.effect("マスク","サイズ",obj.getpixel()*(1-alpha),"ぼかし",10*(1-alpha),"マスクの反転",1,"type",1)
+end
+
+
+if A==1 then
+ if cam_A==nil then cam_A=1 end
+cam_A=cam_A*alpha
+end
+
+
+------------------------------------------------------------------------------------------------------------------------
+@発光(軽量)
+------------------------------------------------------------------------------------------------------------------------
+--track0:強さ,0,200,10
+--track1:拡散,0,500,10
+--track2:しきい値,1,100,20
+--track3:領域拡張,0,500,0
+--dialog:拡散速度,local diff_a=10;拡散＝拡張/chk,local a_reg=1;光色の設定/col,local col=0xffffff;元の色を使う/chk,local no_col=1;強さ(加算),local intensity=0;拡散(加算),local diffuse=0;しきい値(加算),local threshold=0;
+
+--[[
+どうしてもグローじゃダメな人向け発光 
+個別オブジェクトでもそれなりに安心して使えます。
+画面サイズより大きい画像に使うと強制オフスクリーンで普通の発光と同じになります。
+]]
+
+local exreg=obj.track3/2
+ if a_reg==1 then
+      exreg=math.min(530,obj.track1+30)
+ end
+
+local w,h  = obj.getpixel()
+local sw,sh= obj.screen_w,obj.screen_h
+local fix=1
+if (w>=sw) and (h>=sh) then 
+fix=0 
+exreg=0
+end
+
+
+obj.effect("領域拡張",
+"上",exreg,
+"下",exreg,
+"左",exreg,
+"右",exreg,
+"塗りつぶし",0)
+
+diff_a=math.min(60,diff_a)
+
+intensity = math.min(200 ,(intensity or 0)+obj.track0)
+threshold = math.max(1   ,(threshold or 0)+obj.track2)
+diffuse   = math.min(2000,(diffuse   or 0)+obj.track1)
+
+obj.effect("発光",
+"強さ",intensity,
+"拡散",diffuse,
+"しきい値",threshold,
+"拡散速度",diff_a,
+"サイズ固定",fix,
+"color",col,
+"no_color",no_col)
+
+------------------------------------------------------------------------------------------------------------------------
+@拡大率マイナス
+------------------------------------------------------------------------------------------------------------------------
+--track0:拡大率,-1000,1000,100
+obj.zoom=obj.zoom*obj.track0/100
+
+
+
+--++effectC----------------------------------------------------------------------------------------------------------------------
+@単色化B
+------------------------------------------------------------------------------------------------------------------------
+--track0:強度,0,100,100
+--track1:合成モード,0,13,5,1
+--track2:idズラシ,-100,100,0,1
+--dialog:強度,local int=0;色/col,local col1=0xd48b3d;index指定モード/chk,local enable=0;index指定, local id={};
+--check0:info,0
+
+--[[
+グラデーションを使った単色化です。グラデーションです。
+
+◆ index指定モードにチェックを入れると特定の文字だけを着色します。idズラシで位置をずらせます。
+
+   5 だと 最初の文字から5文字分まで着色。
+   
+   一つ一つ個別に指定する場合はテーブルで。 
+   { 1, 4, 6, 7 } = 1,4,6,7 文字目 を着色
+
+   文字列の場合は範囲で指定します。 カンマで区切ってください。            
+   " 3, 12 "   =    3から12文字目を着色
+  
+]]
+
+local offset=math.floor(obj.track2)
+int = int or 0
+local w,h=obj.getpixel()
+local TXTblend={"通常","加算","減算","乗算","スクリーン","ｵｰﾊﾞｰﾚｲ","比較(明)","比較(暗)","輝度","色差","陰影","明暗","差分","輝度を保持"}
+local T = id
+local n,S,E,t
+
+if enable==1 then
+if tostring(id)==T then
+    T = string.gsub(T,"%s","")
+    
+    n = string.find(T,",")
+    S = string.sub(T,1, n-1)
+    E = string.sub(T,  n+1)
+
+ t = {}
+     for i=0,E-S do
+       t[i+1]=S+i
+      end
+  id = t
+end
+
+
+ for i,v in pairs(id) do
+  if (obj.index+1)==v+offset then
+   
+
+   if obj.track1==13 then 
+    obj.effect("単色化","強さ",obj.track0+int,"color",col1)
+   else
+   obj.effect("グラデーション",
+   "強さ",obj.track0+int,
+   "中心X",0,
+   "中心Y",h/2,
+   "角度",0,
+   "幅",0,
+   "blend",obj.track1,
+   "color",col1,
+   "no_color",0,
+   "color2",col1,
+   "no_color2",1,
+   "type",0)
+  end
+
+  end
+ end
+
+else
+
+  if obj.track1==13 then 
+   obj.effect("単色化","強さ",obj.track0+int,"color",col1)
+  else
+  obj.effect("グラデーション",
+  "強さ",obj.track0+int,
+  "中心X",0,
+  "中心Y",h/2,
+  "角度",0,
+  "幅",0,
+  "blend",obj.track1,
+  "color",col1,
+  "no_color",0,
+  "color2",col1,
+  "no_color2",1,
+  "type",0)
+  end
+end
+
+local x,y=obj.ox,obj.oy
+if obj.getoption("gui") then
+if (obj.check0) then
+ if obj.index==obj.num-1 then
+ obj.copybuffer("cache:org","obj")
+ obj.setoption("drawtarget","tempbuffer",math.max(w,300+x*2),math.max(150,h))
+obj.copybuffer("obj","cache:org")
+obj.draw(x,y,0,1,obj.alpha)
+obj.setfont("メイリオ",32,4,0xffffff,0x888888)
+obj.load("合成モード\n"..TXTblend[obj.track1+1])
+obj.draw(0,0,0, 0.8,1)
+obj.load("figure","四角形",col1,30)
+obj.effect("縁取り","サイズ",1,"color",0x121212)
+obj.draw(-90,-18)
+obj.load("tempbuffer")
+--obj.setoption("drawtarget","tempbuffer",0,0)
+--obj.copybuffer("cache:org","tmp")
+end
+end
+end
+
+
+------------------------------------------------------------------------------------------------------------------------
+@個別シャドーB
+------------------------------------------------------------------------------------------------------------------------
+--[[
+個別オブジェクトに対応したシャドーを作るふりをします。
+デフォルトのシャドーエフェクトは個別オブジェクトの場合には描画順の関係で
+位置関係によっては元のオブジェクトに被ってしまうのでそれを回避してみました。
+シャドーに見える部分が元々のオブジェクトなので、これ以降にdraw系スクリプト等を扱うと
+シャドーの方にスクリプトが適用されます。(エフェクトは両方に掛かります)
+
+中心から放射状にシャドーを適用します。
+初期状態だとアンカーポイントを使って中心を設定しますが
+中心に数字を入れた場合は数字で指定したレイヤーのオブジェクトを使って動かせます。
+アンカーに戻したい場合は中心を空欄に。
+
+※問題点
+スペースがあると特定のフォントやフォントサイズによっては動きません。ヘルベチカとか。
+またキャッシュを大量に作るのであまりにオブジェクトが多いとちゃんと動きません、
+またキャッシュがいっぱいになると欠けます。(F5でキャッシュ更新で一時回避)
+
+
+通常シャドーにチェックを入れると普通のシャドーを使います。
+此方は特に問題は起こりませんが、元のオブジェクトにシャドーが被る場合があります。
+
+]]
+
+--track0:濃さ,0,100,100
+--track1:拡散,0,200,5
+--track2:影響範囲,0,3000,1000
+--track3:フェード,0,100,100
+--check0:反転,0
+--dialog:通常シャドー/chk,local use_shadow=0;中心,position={100,0};位置影響,local pos_amo=40;フェードカーブ,local curve_type=0;拡散初期値,local def_s=0;色/col,local col=0x000000;透明度無し/chk,local alpha=0;
+
+local sx,sy
+position=position or {0,0}
+if string.find(tostring(position),"table:") then
+ --obj.setoption("focus_mode","fixed_size")
+  if obj.index==0 then
+  obj.setanchor("position",1)
+  end
+ sx,sy=position[1]+obj.x ,position[2]+obj.y
+else
+ sx,sy=obj.getvalue("layer"..position..".x"),obj.getvalue("layer"..position..".y")
+end
+
+local depth    = obj.track0/100
+local diffuse  = obj.track1
+         def_s = def_s or 0
+         def_s = math.min(100,def_s)
+local offset   = obj.track2
+local fade     = 1-obj.track3/100
+      fade     = fade*offset
+      pos_amo  = pos_amo/1000
+    curve_type = curve_type or 0
+    curve_type = math.min(curve_type,5)
+
+local ZOOM  = obj.getvalue("zoom")/100
+local nx,ny = sx-obj.ox-obj.x-obj.cx*ZOOM, sy-obj.oy-obj.y-obj.cy*ZOOM
+local len   = math.sqrt((nx)^2+(ny)^2)
+local val   = (offset-len)/(1+(math.max(0,offset-fade)))
+      val   = math.max(0,math.min(1,val))
+    
+     if     (curve_type==-1) then
+      val =  (val-1)^3 +1
+     elseif (curve_type==-2) then
+      val = -(val-1)^4 +1 
+     elseif (curve_type==-3) then
+      val = math.sqrt(1-math.pow(val-1,2))
+     elseif (curve_type>0)   then
+      val = val^curve_type
+     end
+
+local d_val = 1-val
+
+if obj.check0 then  val = 1-val end
+
+if alpha==0 then
+alpha=obj.alpha*depth*val --/(1+ math.max(0,( -(offset+100-len) )/200 ))
+else
+alpha=obj.alpha*depth
+end
+
+
+if use_shadow==1 then
+
+obj.effect("シャドー",
+"X", -nx*pos_amo,
+"Y", -ny*pos_amo,
+"濃さ",alpha*100,
+"拡散",def_s + (obj.track1/200)*diffuse * d_val ,
+"影を別オブジェクトで描画",1,
+"color",col)
+
+else
+
+if obj.index==0 then f={} end
+f[obj.index+1]={obj.ox-obj.cx*ZOOM ,obj.oy-obj.cy*ZOOM, obj.oz-obj.cz*ZOOM ,obj.zoom,obj.alpha}
+
+ obj.copybuffer("cache:"..obj.index,"obj")
+ obj.ox=obj.ox-nx*pos_amo
+ obj.oy=obj.oy-ny*pos_amo
+ 
+  obj.effect("単色化","強さ",100,"color",col,"輝度を保持する",0)
+  obj.effect("ぼかし","範囲",def_s + diffuse * d_val)
+
+obj.alpha=alpha
+if obj.index==obj.num-1 then
+ obj.effect()
+ obj.draw()
+ 
+ for i=0,obj.num-1 do
+ obj.load("figure","四角形",0x00,1)
+ obj.copybuffer("obj","cache:"..i)
+ obj.effect()
+ local x,y,z,zoom,alp=unpack(f[i+1])
+ obj.draw(x ,y ,z, zoom,alp)
+ obj.load("figure","四角形",0x00,1)
+ obj.copybuffer("cache:"..i,"obj")
+ end
+ f=nil
+end
+end
+position=nil
+
+-- ++effectC ----------------------------------------------------------------------------------------------------------------------
+@個別カラー(背景色同化)
+------------------------------------------------------------------------------------------------------------------------
+
+--track0:強度,0,100,100
+--track1:合成モード,0,13,0,1
+--track2:ブラー,-30,50,0,1
+
+--背景色で塗ります。但し既に描画された自分自身の色も取得してしまいます。
+
+local amount = obj.track0
+local blendmode = obj.track1
+local blur = obj.track2
+
+--obj.copybuffer("cache:org","obj")
+  obj.copybuffer("tmp","obj")
+if obj.index==0 then
+m_col={} 
+end
+local ZOOM=obj.getvalue("zoom")/100
+local w,h=obj.screen_w,obj.screen_h
+local x,y,z=obj.ox-obj.cx*ZOOM, obj.oy-obj.cy*ZOOM, obj.oz-obj.cz*ZOOM
+local rx,ry,rz=obj.rx,obj.ry,obj.rz
+local alpha,zoom=obj.alpha,obj.zoom
+local fx,fy=x+obj.x+w/2 ,y+obj.y+h/2
+local blur_abs=math.abs(blur)
+fx=math.max(1,math.min(w-1-blur_abs,fx))
+fy=math.max(1,math.min(h-1-blur_abs,fy))
+
+obj.load("framebuffer",fx,fy,blur_abs+1,blur_abs+1)
+--obj.ox,obj.oy,obj.oz=x,y,z
+obj.effect("ぼかし","範囲",blur,"サイズ固定",1)
+obj.effect("モザイク","サイズ",-blur)
+
+local pix=math.floor(blur_abs/2)
+local icolor=obj.getpixel(pix,pix)
+
+m_col[obj.index+1]=icolor
+--obj.copybuffer("obj","cache:org")
+obj.load("tempbuffer")
+obj.ox,obj.oy,obj.oz = x,y,z
+obj.rx,obj.ry,obj.rz = rx,ry,rz
+obj.alpha,obj.zoom   = alpha,zoom 
+
+if obj.track1==13 then
+obj.effect("単色化","強さ",amount,"color",icolor,"輝度を保持する",1)
+else
+obj.effect("グラデーション","blend",blendmode,"強さ",amount,"color",icolor, "color2",icolor)
+end
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+@レイヤー指定マスク
+------------------------------------------------------------------------------------------------------------------------
+--track0:offsetX,-2000,2000,0
+--track1:offsetY,-2000,2000,0
+--track2:マスク拡張,-100,100,0
+--track3:適用度,0,100,100
+--check0:ソースのエフェクトを反映,0
+--dialog:ソースレイヤー,local Layer=0;透明度反転/chk,local rev=0;マスクリサイズ%,local masksize=100;  マスクぼかし,local blur=0;
+
+
+Layer=Layer or obj.layer
+masksize=masksize or 100
+local w,h   = obj.getpixel()
+local sw,sh = obj.screen_w,obj.screen_h
+local GV=obj.getvalue
+local x ,y ,z  = GV("layer"..Layer..".x") ,GV("layer"..Layer..".y") ,GV("layer"..Layer..".z")
+local rx,ry,rz = GV("layer"..Layer..".rx"),GV("layer"..Layer..".ry"),GV("layer"..Layer..".rz")
+
+obj.setoption("drawtarget","tempbuffer",w,h)
+
+obj.draw()
+obj.copybuffer("cache:org","tmp")
+
+obj.setoption("blend","alpha_sub")
+obj.load("layer",Layer,obj.check0)
+
+obj.effect("境界ぼかし","範囲",-math.min(0,obj.track2),"透明度の境界をぼかす",1)
+obj.effect("縁取り","サイズ",obj.track2,"ぼかし",1,"color",0xffffff)
+obj.effect("反転","透明度反転",rev)
+obj.effect("ぼかし","範囲",blur)
+
+obj.draw(
+x-obj.x+obj.track0, y-obj.y+obj.track1,0,
+GV("layer"..Layer..".zoom")/100*(masksize/100)* 100/obj.getvalue("zoom"),obj.track3/100,
+rx-obj.rx, ry-obj.ry, rz-obj.rz)
+
+
+obj.load("tempbuffer")
+
+
+------------------------------------------------------------------------------------------------------------------------
+@4色グラデーション(円)
+------------------------------------------------------------------------------------------------------------------------
+--track0:強度,0,100,100
+--track1:色数,1,4,4,1
+--track2:幅,0,2000,500
+--track3:合成モード,0,12,0,1
+--check0:Info,0
+--dialog:反転/chk,local REV=0;色1/col,local col1=0x30a4a1;色2/col,local col2=0xefd5ae;色3/col,local col3=0xf0a24c; 色4/col,local col4=0xeb3979;位置,Gradiendtpos={-200,-200, 200,-200, 200,200 ,-200,200};強度個別%,local strength={100,100,100,100};幅個別%, local width={100,100,100,100};合成モード個別/chk,local blend_m=0;合成モード指定,local blend_type_m={0,0,0,0};
+
+--3色以上だと拡大率が100でないとすぐバグる背景専用がっかりグラデーション。素直にティムさんの多色グラデーションを使いましょう。
+
+local COL ={col1,col2,col3,col4}
+strength=strength or {100,100,100,100}
+width=width or {100,100,100,100}
+
+local blendmode={obj.track3,obj.track3,obj.track3,obj.track3}
+if blend_m==1 then 
+blendmode=blend_type_m 
+end
+
+local no_col1,no_col2=0,1
+if REV==1 then 
+no_col1,no_col2=no_col2,no_col1
+end
+
+obj.setanchor("Gradiendtpos",obj.track1,"star")
+
+
+for i=1,obj.track1 do
+obj.effect("グラデーション",
+"強さ",obj.track0*strength[i]/100,
+"中心X",Gradiendtpos[i*2-1],
+"中心Y",Gradiendtpos[i*2],
+"角度",0,
+"幅",obj.track2*width[i]/100,
+"blend",blendmode[i],
+"color",COL[i],
+"no_color",no_col1,
+"color2",COL[i],
+"no_color2",no_col2,
+"type",1)
+end
+
+
+--以下info表示
+
+if (obj.check0) then 
+  obj.copybuffer("tmp","obj")
+  obj.setoption("drawtarget","tempbuffer")
+
+  
+  local TXTblend={"通常","加算","減算","乗算","スクリーン","オーバーレイ","比較(明)","比較(暗)","輝度","色差","陰影","明暗","差分"}
+  
+  table.insert(blendmode,1)
+  
+ for i=1,obj.track1 do
+    
+    obj.setfont("メイリオ",30,4,0xfafafa,0x9a9a9a)
+  
+    obj.load("figure","三角形",COL[i],100)
+    obj.effect("シャドー","X",0,"Y",0,"濃さ",15,"拡散",5,"color",0x000000)
+    obj.draw(Gradiendtpos[i*2-1],Gradiendtpos[i*2],0,0.8,1,0,0,60)
+    
+    obj.load("figure","三角形",COL[(i+1)%4+1],100,1)
+    obj.draw(Gradiendtpos[i*2-1],Gradiendtpos[i*2],0,0.8,1,0,0,60)
+    
+    obj.load("text",""..i)
+    obj.draw(Gradiendtpos[i*2-1],Gradiendtpos[i*2],0,0.8)
+   
+   local B=TXTblend[blendmode[i]+1]
+    obj.load("text","["..blendmode[i].."/"..B.."]")
+    obj.draw(Gradiendtpos[i*2-1],Gradiendtpos[i*2]-28,0,0.6)
+    
+   local r,g,b=RGB(COL[i])
+    
+  local function S(v)
+     local TXT16 ={"a","b","c","d","e","f"}
+     local v1,v2=math.floor(v/16),v-math.floor(v/16)*16
+     if v1>9 then v1=TXT16[v1-9] end
+     if v2>9 then v2=TXT16[v2-9] end
+     return (v1..v2)
+    end
+
+  --obj.setfont("メイリオ",30,0,COL[i])
+  obj.load("text","0x"..S(r)..S(g)..S(b))
+  obj.effect("シャドー","X",1,"Y",1,"濃さ",55,"拡散",3,"color",0x000000)
+  obj.draw(Gradiendtpos[i*2-1],Gradiendtpos[i*2]+28,0,0.5)
+end
+
+  obj.load("tempbuffer")
+end
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+@震えるB
+------------------------------------------------------------------------------------------------------------------------
+--track0:振幅,0,500,5
+--track1:角度,0,180,10
+--track2:間隔,0,1000,0
+--track3:適用度,0,100,100
+--dialog:適用度(加算),local V=0;X%,local X=100;Y%,local Y=100;Z%,local Z=100;
+
+--適用度を追加しただけになります。Z軸も追加。
+
+ V=V/100+obj.track3/100
+if( obj.track2 == 0 ) then
+	obj.ox = obj.ox+rand(-obj.track0,obj.track0,0)*V*X/100
+	obj.oy = obj.oy+rand(-obj.track0,obj.track0,1)*V*Y/100
+	obj.rz = obj.rz+rand(-obj.track1,obj.track1,2)*V*Z/100
+else
+	t = obj.time*100/obj.track2
+	p = math.floor(t)
+	t = t-p
+	x0 = obj.rand(-1000,1000,0,p+0)/1000*obj.track0
+	x1 = obj.rand(-1000,1000,0,p+1)/1000*obj.track0
+	x2 = obj.rand(-1000,1000,0,p+2)/1000*obj.track0
+	x3 = obj.rand(-1000,1000,0,p+3)/1000*obj.track0
+
+	y0 = obj.rand(-1000,1000,1,p+0)/1000*obj.track0
+	y1 = obj.rand(-1000,1000,1,p+1)/1000*obj.track0
+	y2 = obj.rand(-1000,1000,1,p+2)/1000*obj.track0
+	y3 = obj.rand(-1000,1000,1,p+3)/1000*obj.track0
+
+
+	z0 = obj.rand(-1000,1000,2,p+0)/1000*obj.track0
+	z1 = obj.rand(-1000,1000,2,p+1)/1000*obj.track0
+	z2 = obj.rand(-1000,1000,2,p+2)/1000*obj.track0
+	z3 = obj.rand(-1000,1000,2,p+3)/1000*obj.track0
+
+	r0 = obj.rand(-1000,1000,3,p+0)/1000*obj.track1
+	r1 = obj.rand(-1000,1000,3,p+1)/1000*obj.track1
+	r2 = obj.rand(-1000,1000,3,p+2)/1000*obj.track1
+	r3 = obj.rand(-1000,1000,3,p+3)/1000*obj.track1
+
+	x,y,z = obj.interpolation(t,x0,y0,z0,x1,y1,z1,x2,y2,z2,x3,y3,z3)
+	obj.ox = obj.ox + x*V*X/100
+	obj.oy = obj.oy + y*V*Y/100
+        obj.oz = obj.oz + z*V*Z/100
+	r = obj.interpolation(t,r0,r1,r2,r3)
+	obj.rz = obj.rz + r*V
+end
+
+------------------------------------------------------------------------------------------------------------------------
+@座標拡大B
+------------------------------------------------------------------------------------------------------------------------
+--track0:X,-9000,9000,100
+--track1:Y,-9000,9000,100
+--track2:Z,-9000,9000,100
+--track3:適用度,0,100,100
+--dialog:ランダム,local RAND=0;
+
+local X=obj.track0/100
+local Y=obj.track1/100
+local Z=obj.track2/100
+local D=obj.track3/100
+
+if RAND==0 then
+obj.ox=obj.ox+(obj.ox*X)*D
+obj.oy=obj.oy+(obj.oy*Y)*D
+obj.oz=obj.oz+(obj.oz*Z)*D
+else
+X=rand(-10000,10000,obj.index+RAND*2,1)/10000* X
+Y=rand(-10000,10000,obj.index+RAND*3,2)/10000* Y
+Z=rand(-10000,10000,obj.index+RAND*4,3)/10000* Z
+obj.ox=obj.ox+(obj.ox*X+X*100)*D
+obj.oy=obj.oy+(obj.oy*Y+Y*100)*D
+obj.oz=obj.oz+(obj.oz*Z+Z*100)*D
+end
+
+
+------------------------------------------------------------------------------------------------------------------------
+@レイヤーにライン(2D)
+------------------------------------------------------------------------------------------------------------------------
+--track0:長さ%,0,200,100
+--track1:線太さ,1,50,1,1
+--track2:点サイズ,1,500,50
+--track3:点幅,1,1000,100
+--check0:元を描画,0
+--dialog:レイヤ指定,local layer={};モード[0-4],local mode=0;loop(1-2)/chk,local loop=1;ラインカラー/col,local Lcol=0x666666;点図形/fig,local fig="円";点カラー/col,local Pcol=0xffaa00;effect適用[0-2],local FX=0;
+
+--[[
+指定したレイヤーに向かって線を生やします。ネタです。
+
+※拡大率は100％固定で。長さも100%でないと色々といまいちです。
+
+元のオブジェクトを拡大,縮小する場合はこのスクリプトより上に「基本効果の拡大率」を適用してください。
+
+ラインの引き方のタイプを追加しました。
+ラインカラー、点カラーは {0xfffff,0xf9a8ca,0xff4545} とテーブルで指定するとカラフルになります。
+
+またモード0限定ですが 点カラーに "" と空文字列を入れると画面のカラーピッカーの様に色が付きます。
+]]
+
+if obj.check0 then
+obj.effect()
+obj.copybuffer("cache:org","obj")
+end
+
+--obj.setoption("drawtarget","tempbuffer",obj.screen_w+math.abs(obj.x*2),obj.screen_h+math.abs(obj.y*2))
+
+
+local maskfig=1
+    if fig=="四角形" then maskfig=2
+elseif fig=="三角形" then maskfig=3
+elseif fig=="五角形" then maskfig=4
+elseif fig=="六角形" then maskfig=5
+elseif fig=="星型"   then maskfig=6
+else                      maskfig=1
+end
+
+
+
+local ST=math.min(1,obj.track0/100)
+local line=obj.track1
+local GV=obj.getvalue
+local W=obj.track2/2*0.7
+local clip=0
+
+
+
+
+local PCOL=Pcol
+local icolor
+
+if string.find(tostring(Pcol),"table:") then
+ Pcol=Pcol
+elseif Pcol=="" then
+ obj.load("framebuffer")
+ --obj.effect("ぼかし",2,"サイズ固定",1)
+ icolor=obj.getpixel(obj.x+obj.screen_w/2,obj.y+obj.screen_h/2)
+ local color={}
+ for i=1,#layer do
+  color[i] = obj.getpixel(GV("layer"..layer[i]..".x")+obj.screen_w/2,GV("layer"..layer[i]..".y")+obj.screen_h/2)
+ end
+ if mode==0 then
+  table.insert(color,1,icolor)
+ end
+ Pcol=color
+  else
+ Pcol={Pcol}
+end
+
+if string.find(tostring(Lcol),"table:") then
+Lcol=Lcol
+elseif
+Lcol=="" then
+Lcol=Pcol
+else
+Lcol={Lcol}
+end
+
+
+if mode==0 then
+table.insert(layer,obj.layer)
+
+for i=1,#layer-1 do
+local x,y=obj.x+obj.ox,obj.y+obj.oy
+local X,Y=GV("layer"..layer[i]..".x"),GV("layer"..layer[i]..".y")
+local length=((X-x)^2+(Y-y)^2)^0.5
+local rot=math.deg(math.atan2(Y-y,X-x))
+local length=length*ST
+
+--線
+obj.load("figure","四角形",Lcol[i%#Lcol+1],line)
+obj.effect("領域拡張","塗りつぶし",1,"右",length)
+obj.effect("クリッピング","左",clip + length*(-100+obj.track0)/100)
+local W=(obj.w-obj.track1)/2
+obj.effect("マスク","X", W,"サイズ",obj.track2*0.7,"マスクの反転",1,"回転",GV("rz")-rot,"type",maskfig,"mode",1)
+obj.effect("マスク","X",-W,"サイズ",obj.track2*0.7,"マスクの反転",1,"回転",GV("rz")-rot,"type",maskfig,"mode",1)
+if FX==0 or FX==1 then obj.effect() end
+obj.draw(0,0,0,  1,1,  0,0,rot-GV("rz"))
+--obj.draw((X-x)/2,(Y-y)/2,0,  1,1,  0,0,rot-GV("rz")) --仮想バッファ時
+
+--点
+if PCOL=="" then
+obj.load("figure",fig,Pcol[i+1],obj.track2,obj.track3)
+obj.effect("縁取り","サイズ",1,"color",Lcol[1],"ぼかし",100)
+if FX==0 or FX==2 then obj.effect() end
+else
+obj.load("figure",fig,Pcol[i%#Pcol+1],obj.track2,obj.track3)
+ if FX==0 or FX==2 then obj.effect() end
+end
+obj.draw((X-obj.x)*ST,(Y-obj.y)*ST,0, 0.7,1,  0,0,0)
+end
+obj.load("figure",fig,Pcol[1],obj.track2,obj.track3)
+if PCOL=="" then obj.effect("縁取り","サイズ",1,"color",Pcol[#Pcol],"ぼかし",100) end
+ if FX==0 or FX==2 then obj.effect() end
+obj.draw(0,0,0, 0.7,1,  0,0,0)
+
+
+
+elseif mode>0 and mode<3 then
+
+if mode > 1 then table.insert(layer,obj.layer) end
+if loop ==1 then table.insert(layer,layer[1]) end
+
+ if PCOL=="" then 
+  table.insert(Pcol,icolor) 
+ end
+
+--if loop==0 and PCOL=="" then table.insert(Pcol,1,icolor) end 
+
+for i=1,#layer-1 do
+local x,y=GV("layer"..layer[i]..".x"),GV("layer"..layer[i]..".y")
+local X,Y=GV("layer"..layer[i+1]..".x"),GV("layer"..layer[i+1]..".y")
+local length=((X-x)^2+(Y-y)^2)^0.5
+local rot=math.deg(math.atan2(Y-y,X-x))
+local length=length*ST
+--線
+obj.load("figure","四角形",Lcol[i%#Lcol+1],line)
+obj.effect("領域拡張","塗りつぶし",1,"右",length)
+obj.effect("クリッピング","左",clip + length*(-100+obj.track0)/100)
+local W=(obj.w-obj.track1)/2
+obj.effect("マスク","X", W,"サイズ",obj.track2*0.7,"マスクの反転",1,"回転",GV("rz")-rot,"type",maskfig,"mode",1)
+obj.effect("マスク","X",-W,"サイズ",obj.track2*0.7,"マスクの反転",1,"回転",GV("rz")-rot,"type",maskfig,"mode",1)
+if FX==0 or FX==1 then obj.effect() end
+
+
+obj.draw(x-obj.x,y-obj.y,0,  1,1,  0,0,rot-GV("rz"))
+
+--点
+obj.load("figure",fig,Pcol[i%#Pcol+1],obj.track2,obj.track3)
+if FX==0 or FX==2 then obj.effect() end
+obj.draw( X*ST+x*(1-ST)-obj.x,Y*ST+(y*(1-ST))-obj.y,0, 0.7,1,  0,0,0)
+
+if i==#layer-1 and loop==0 then
+obj.load("figure",fig,Pcol[1],obj.track2,obj.track3)
+if FX==0 or FX==2 then obj.effect() end
+obj.draw( GV("layer"..layer[1]..".x")-obj.x,GV("layer"..layer[1]..".y")-obj.y,0, 0.7,1,  0,0,0)
+end
+end
+
+
+
+elseif mode>2 then
+
+if mode==4 then table.insert(layer,obj.layer) end
+table.insert(layer,layer[1])
+if PCOL=="" then table.insert(Pcol,icolor) end
+
+for i=1,#layer-1 do
+for j=i,#layer-2 do
+local x,y=GV("layer"..layer[i]..".x"),GV("layer"..layer[i]..".y")
+local X,Y=GV("layer"..layer[j+1]..".x"),GV("layer"..layer[j+1]..".y")
+local length=((X-x)^2+(Y-y)^2)^0.5
+local rot=math.deg(math.atan2(Y-y,X-x))
+local length=length*ST
+
+--線
+obj.load("figure","四角形",Lcol[j%#Lcol+1],line)
+obj.effect("領域拡張","塗りつぶし",1,"右",length)
+obj.effect("クリッピング","左",clip + length*(-100+obj.track0)/100)
+local W=(obj.w-obj.track1)/2
+obj.effect("マスク","X", W,"サイズ",obj.track2*0.7,"マスクの反転",1,"回転",GV("rz")-rot,"type",maskfig,"mode",1)
+obj.effect("マスク","X",-W,"サイズ",obj.track2*0.7,"マスクの反転",1,"回転",GV("rz")-rot,"type",maskfig,"mode",1)
+if FX==0 or FX==1 then obj.effect() end
+obj.draw(x-obj.x,y-obj.y,0,  1,1,  0,0,rot-GV("rz"))
+end
+end
+
+--点
+for i=1,#layer-1 do
+local x,y=GV("layer"..layer[i]..".x"),GV("layer"..layer[i]..".y")
+local X,Y=GV("layer"..layer[i+1]..".x"),GV("layer"..layer[i+1]..".y")
+obj.load("figure",fig,Pcol[i%#Pcol+1],obj.track2,obj.track3)
+if FX==0 or FX==2 then obj.effect() end
+obj.draw( X*ST+x*(1-ST)-obj.x,Y*ST+(y*(1-ST))-obj.y,0, 0.7,1,  0,0,0)
+
+end
+end
+
+if obj.check0 then
+obj.copybuffer("obj","cache:org")
+obj.draw()
+end
+obj.setoption("focus_mode","fixed_size")
+
+
+------------------------------------------------------------------------------------------------------------------------
+@リングライン(2D)
+------------------------------------------------------------------------------------------------------------------------
+--track0:進行%,0,200,100
+--track1:Type,1,6,1,1
+--track2:線サイズ,1,60,10
+--track3:点サイズ,1,200,50
+--check0:仮想バッファ,1
+--dialog:レイヤーA,local I_POS=obj.layer;レイヤーB,local POS={};線色/col,line_col=0xffffff;線幅,local line_thinness=200;線密度%,local den=150; 点色/col,point_col=0xffffff;点幅,local point_thinness=200;自身を描画/chk,local Draw=0;
+
+--[[
+レイヤーAにあるオブジェクトからレイヤーBで指定したレイヤーのオブジェクトに円状に線を引きます。Z軸は有りません。やはりネタです。
+
+レイヤの指定方法は幾つかあり、
+
+ 10          --数字の場合      レイヤー10
+ 
+ {3, 5, 6}   --配列の場合      レイヤー 3, 5, 6
+
+ "A"         --文字列の場合  座標格納(親)を使って付けた名前 A のオブジェクト(個別オブジェクト可)
+
+となっています。これはレイヤーA、レイヤーB 同様です。
+レイヤーA、またはレイヤーBの何れかが複数の座標を指定している場合は片方が空欄でも動作します。
+全体的に用途が謎。
+ ]]
+
+
+local step=obj.track0*1.8
+local line_size=obj.track2
+local point_size=obj.track3*1.5
+den=den/100
+local tType=obj.track1
+local GV=obj.getvalue
+
+I_POS = I_POS or {} 
+  POS =   POS or {}
+
+if obj.check0 then
+obj.setoption("focus_mode","fixed_size")
+obj.setoption("drawtarget","tempbuffer",obj.screen_w,obj.screen_h)
+end
+--obj.setoption("blend","alpha_max")
+if Draw==1 then obj.draw(obj.getvalue("x"),obj.getvalue("y")) end
+obj.setoption("billboard",3)
+
+local tbl={}
+
+
+local function position_nest(p)
+local p=p
+local GV=obj.getvalue
+local P={}
+ if tostring(p)==p then
+    P=GVA[p.."nest"]
+ elseif string.find(tostring(p),"table:")==1 then
+    for i=1,#p do
+      P[i]={GV("layer"..p[i]..".x"),GV("layer"..p[i]..".y"),GV("layer"..p[i]..".z")}
+    end
+ else
+      P[1]={GV("layer"..p..".x"),GV("layer"..p..".y"),GV("layer"..p..".z")}
+  end
+return P
+end
+
+
+local P_layer = position_nest(POS)
+ 
+if I_POS~=nil then
+local I_layer = position_nest(I_POS)
+
+  for i=1,#I_layer do
+    table.insert(P_layer,i,I_layer[i])
+  end
+end
+
+
+
+local tbl=P_layer
+local A1,A2= 0,0
+local R1,R2= step,0
+if tType==2 or tType==6 then R1,R2=R2,R1 end --反転
+if tType==4 then R1,R2=0,step end --反転
+
+
+--[[
+local function draw_ring(A1,A2,R1,R2,den,line_col,line_size,line_thinness)
+local LEN=math.sqrt((A2[1]-A1[1])^2+(A2[2]-A1[2])^2+(A2[3]-A1[3])^2)
+  local rad=LEN/2
+  local rot=-math.deg(math.atan2(A2[2]-A1[2],p2[1]-A1[1]))
+  local x,y
+
+  for i=rot-R1,rot+R2 ,(180/rad)/den do
+   x = -math.cos(i*math.pi/180)*rad +A1[1]
+   y =  math.sin(i*math.pi/180)*rad +A1[2]
+
+   x=x+(A2[1]-A1[1])/2
+   y=y+(A2[2]-A1[2])/2
+   obj.load("figure","円",line_col,line_size,line_thinness)
+   obj.draw(x,y,0,0.3)
+  end
+ end
+]]
+
+
+if tType<3 then
+
+ for f=1,#tbl-1 do
+  local A1,A2 = tbl[1],tbl[f+1]
+  --draw_ring(A1,A2,R1,R2,den,line_col,line_size,line_thinness)
+  --end
+
+
+  local LEN=math.sqrt((A2[1]-A1[1])^2+(A2[2]-A1[2])^2+(A2[3]-A1[3])^2)
+  local rad=LEN/2
+  local rot=-math.deg(math.atan2(A2[2]-A1[2],A2[1]-A1[1]))
+  local x,y
+
+  for i=rot-R1,rot+R2 ,(180/rad)/den do
+   x = -math.cos(i*math.pi/180)*rad +A1[1]
+   y =  math.sin(i*math.pi/180)*rad +A1[2]
+   
+   x=x+(A2[1]-A1[1])/2
+   y=y+(A2[2]-A1[2])/2
+   
+   obj.load("figure","円",line_col,line_size,line_thinness)
+   obj.draw(x,y,0,0.3)
+  end
+ end
+
+
+elseif tType<5 then
+
+ for f=1,#tbl/2 do --ring type                      
+  local A1,A2 = tbl[f],tbl[1+#tbl-f]  --ring type 
+  --draw_ring(A1,A2,R1,R2,den,line_col,line_size,line_thinness)
+  --end
+
+
+  local LEN=math.sqrt((A2[1]-A1[1])^2+(A2[2]-A1[2])^2+(A2[3]-A1[3])^2)
+  local rad=LEN/2
+  local rot=-math.deg(math.atan2(A2[2]-A1[2],A2[1]-A1[1]))
+  local x,y
+
+   for i=rot-R1,rot+R2 ,(180/rad)/den do
+    x = -math.cos(i*math.pi/180)*rad +A1[1]
+    y =  math.sin(i*math.pi/180)*rad +A1[2]
+
+    x=x+(A2[1]-A1[1])/2
+    y=y+(A2[2]-A1[2])/2
+    obj.load("figure","円",line_col,line_size,line_thinness)
+    obj.draw(x,y,0,0.3)
+  end
+ end
+
+elseif tType<7 then
+
+for f=1,#tbl-1 do --ring type                      
+  local A1,A2 = tbl[f],tbl[f+1]  --ring type 
+  --draw_ring(A1,A2,R1,R2,den,line_col,line_size,line_thinness)
+  --end
+
+
+  local LEN=math.sqrt((A2[1]-A1[1])^2+(A2[2]-A1[2])^2+(A2[3]-A1[3])^2)
+  local rad=LEN/2
+  local rot=-math.deg(math.atan2(A2[2]-A1[2],A2[1]-A1[1]))
+  local x,y
+
+   for i=rot-R1,rot+R2 ,(180/rad)/den do
+    x = -math.cos(i*math.pi/180)*rad +A1[1]
+    y =  math.sin(i*math.pi/180)*rad +A1[2]
+
+    x=x+(A2[1]-A1[1])/2
+    y=y+(A2[2]-A1[2])/2
+    obj.load("figure","円",line_col,line_size,line_thinness)
+    obj.draw(x,y,0,0.3)
+  end
+ end
+
+end
+
+
+obj.load("figure","円",point_col,point_size,point_thinness)
+for f=1,#P_layer do
+obj.draw(P_layer[f][1],P_layer[f][2],0,0.5)
+end
+
+obj.draw(tbl[1][1],tbl[1][2],0,0.5)
+
+if obj.check0 then
+obj.setoption("billboard",0)
+obj.load("tempbuffer")
+end
+
+if (obj.check0) or (I_POS==obj.layer) then 
+obj.ox, obj.oy = -obj.x, -obj.y 
+end
+------------------------------------------------------------------------------------------------------------------------
+@3Dベジェライン
+------------------------------------------------------------------------------------------------------------------------
+--track0:進行度A,-4000,4000,0
+--track1:進行度B,-4000,4000,0
+--track2:密度,1,4000,100
+--track3:サイズ,1,100,10,1
+--check0:元画像使用,0
+--dialog:線色/col,local line_col=0xffffff;対象A, local PA=obj.layer-1;対象B,local PB=obj.layer;座標間引き,local subsample=2;LinetypeX,local TX=6; LinetypeY,local TY=7;LinetypeZ,local TZ=16;ポイント描画/chk,local Point=0;ポイントカラー/col,local point_col=0xffffff;サイズ-ライン,local point_s_l={50,100};text使用/font/text,local txt ={0,"fontmane","TEXT"};カメラ向き,local cam_b=3;
+
+--[[
+複数のレイヤ同士をeasingで結びます。描画間隔を均等化はできません…
+対象A,Bには レイヤ、配列で複数指定したレイヤー、座標格納でつけた名前の文字列の何れかを入力します。
+x,yなどを異なるイージングで結ぶとそれっぽい線になります。
+text使用は { 1 or 0 でテキスト入力機能のon/off   , フォント名の文字列入力  , 入れたい文字列の入力   } 
+となっています。
+]]
+
+if obj.index==0 then I3IDX={} end
+I3IDX[obj.index+1]={obj.ox,obj.oy,obj.oz}
+local ox,oy,oz = obj.ox,obj.oy,obj.oz
+obj.copybuffer("tmp","obj")
+if not obj.check0 then obj.load("figure","円",line_col,  obj.track3,  point_s_l[2]) end
+cam_b=cam_b or 3
+obj.setoption("billboard",cam_b)
+subsample=subsample+1 or 1
+
+local E = require("easing")
+local E_type = {
+		E.linear				,--  1
+		E.inQuad				,--  2
+		E.outQuad				,--  3
+		E.inOutQuad				,--  4
+		E.outInQuad				,--  5
+		E.inCubic 				,--  6
+		E.outCubic				,--  7
+		E.inOutCubic			,--  8
+		E.outInCubic			,--  9
+		E.inQuart				,-- 10
+		E.outQuart				,-- 11
+		E.inOutQuart			,-- 12
+		E.outInQuart			,-- 13
+		E.inQuint				,-- 14
+		E.outQuint				,-- 15
+		E.inOutQuint			,-- 16
+		E.outInQuint			,-- 17
+		E.inSine				,-- 18
+		E.outSine				,-- 19
+		E.inOutSine				,-- 20
+		E.outInSine				,-- 21
+		E.inExpo				,-- 22
+		E.outExpo				,-- 23
+		E.inOutExpo				,-- 24
+		E.outInExpo				,-- 25
+		E.inCirc				,-- 26
+		E.outCirc				,-- 27
+		E.inOutCirc				,-- 28
+		E.outInCirc				,-- 29
+		E.inElastic				,-- 30
+		E.outElastic			,-- 31
+		E.inOutElastic			,-- 32
+		E.outInElastic			,-- 33
+		E.inBack				,-- 34
+		E.outBack				,-- 35
+		E.inOutBack				,-- 36
+		E.outInBack				,-- 37
+		E.inBounce				,-- 38
+		E.outBounce				,-- 39
+		E.inOutBounce			,-- 40
+		E.outInBounce			,-- 41
+	}
+
+
+local function position_nest(p)
+  local p=p
+  local GV=obj.getvalue
+  local P={}
+   if tostring(p)==p then
+      P=GVA[p.."nest"]
+   elseif string.find(tostring(p),"table:")==1 then
+      for i=1,#p do
+        P[i]={GV("layer"..p[i]..".x"),GV("layer"..p[i]..".y"),GV("layer"..p[i]..".z")}
+      end
+   else
+        P[1]={GV("layer"..p..".x"),GV("layer"..p..".y"),GV("layer"..p..".z")}
+    end
+  return P
+  end
+
+
+local posA,posB
+if obj.index==0 then IDIX={} end
+IDIX[obj.index+1] = {obj.ox+obj.x,obj.oy+obj.y,obj.oz+obj.z}
+ if PA==obj.layer then
+  posA=IDIX
+ else
+  posA=position_nest(PA)
+ end
+
+ if PB==obj.layer then
+  posB=IDIX
+ else
+  posB=position_nest(PB)
+ end
+
+local Sa=obj.track0/10
+local Sb=obj.track1/10
+
+local d=#posB
+   if d<#posA then d=#posA end
+
+local num=math.floor(obj.track2/10) 
+
+for u=1, d , subsample/1 do
+ local j,k=u,u
+if #posA==1 then j=1 end
+if #posB==1 then k=1 end
+  local P1=posA[j]
+  local P2=posB[k]
+local sbf = 1/3 
+if txt[1]==1 then sbf = 1 end
+  
+for i=0+Sa,num+Sb ,sbf do 
+
+  if txt[1]==1 then
+  local tx = i
+  obj.setfont(txt[2],obj.track3,0,line_col)
+  tx=math.floor(math.abs(i))%string.len(txt[3])+1
+  obj.load( string.sub(txt[3],tx,tx) )
+  end
+  
+  local x = E_type[TX](i, P1[1], P2[1]-P1[1],num)
+  local y = E_type[TY](i, P1[2], P2[2]-P1[2],num)
+  local z = E_type[TZ](i, P1[3], P2[3]-P1[3],num)
+
+
+ x=x-obj.x
+ y=y-obj.y
+ z=z-obj.z
+
+
+ obj.draw(x,y,z,1,1)
+  end
+end
+
+if Point==1 then
+obj.setoption("billboard",3)
+  obj.load("figure","円",point_col,point_s_l[1],point_s_l[2])
+   for i=1,#posA do
+    obj.draw(posA[i][1]-obj.x,posA[i][2]-obj.y,posA[i][3]-obj.z,1/2)
+   end
+   for i=1,#posB do
+    obj.draw(posB[i][1]-obj.x,posB[i][2]-obj.y,posB[i][3]-obj.z,1/2)
+   end
+end
+
+
+obj.copybuffer("obj","tmp")
+
+obj.setoption("billboard",0)
+if obj.index==obj.num-1 then
+for i=1,obj.num do
+ obj.draw(unpack(I3IDX[i]))
+end
+end

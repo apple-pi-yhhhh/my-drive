@@ -1,0 +1,153 @@
+--[[
+
+	個別オブジェクトの座標をアンカーポイントで操作したり、現在の配置を保存して他で呼び出したりするスクリプトです。
+	
+	rikky_module.dllを使用しているのでお持ちでない方は rikkyさんのとっても便利なDLLパック(rikky_module)ver1.0 を導入して下さい。
+	http://hazumurhythm.com/wev/downloads/
+	導入についてはzipの中身「rikky_moduleの使い方.txt」の30行目まで要熟読。
+	
+
+	■ トラックバー ■
+
+		affect 		
+			100にするとアンカーポイントの配置にオブジェクトが移動します。
+				
+			アンカーポイントは16まで。
+
+		
+		swap 		
+			配置順を循環するように入れ替えます。
+	
+		link  		
+			100にするとダイアログの[呼び出し名]に有効な名前がある場合のみ、そちらの座標に入れ替わります。
+
+		pos変数受け入れ
+			設定ダイアログのposの項目に変数を入れたい場合は有効に。
+	
+	■ ダイアログ ■
+		
+		pos
+			アンカーの座標です。弄ることはまずないと思います。
+				
+			小数点以下は切り捨てられます。 変数を入れたい場合はチェックボックスを有効にしないと書き換わってしまいます。
+
+		
+		保存名 		
+			現在の位置を保存します。別のオブジェクト等に現在の配置を伝えることができます。
+				
+			空欄だとレイヤー番号が入ります。
+
+				
+		clear
+			チェックすると保存した座標を削除します。
+
+				
+	
+		呼び出し名  	
+			あらかじめ保存しておいた名前を入れると配置を呼び出します。
+	
+			配置の影響度はトラックバーのlinkを使用します。
+
+]]
+
+-------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
+
+--track0:affect,0,100,100
+--track1:swap,0,1000,0,0.01
+--track2:link,0,100,100
+--track3:view,0,1,0,1
+--check0:pos変数受け入れ,0
+--dialog:pos,pos={0,0,0};保存名,n0="";clear/chk,cl0=0;呼び出し名,N0="";基準座標を含む/chk,ck0=0;
+-------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
+
+require("rikky_module")
+
+if pos==nil then pos = {} end
+if not GVA then GVA = {} end
+local n=n0
+local N=N0
+local ck=ck0
+local cl=cl0
+n0,N0,ck0,cl0 = nil,nil,nil,nil
+
+if n=="" then
+	n = obj.layer..""
+end
+
+local num 	= obj.num
+local affect 	= obj.track0*.01
+local swap 	= obj.track1*.1
+local link 	= obj.track2*.01
+local view 	= obj.track3
+local id 	= obj.index
+
+obj.setanchor("pos",num,"xyz")
+
+local P = pos
+local L = pos
+
+if #N>0 then
+	for k,v in pairs(GVA) do
+ 		if k==N then
+			L = GVA[k]
+		break
+		end
+	end
+
+	if #P<#L then
+		for i=1,#L-#P do
+			table.insert(P,L[i])
+		end
+	elseif #P>#L then
+		for i=1,#P-#L do
+			table.insert(L,P[i])
+		end
+	end
+end
+
+local s,t =math.modf(swap)
+t = (math.cos(math.pi*t)-1)*-.5
+
+local ox  = P[((id+s+1)%num)*3+1]*t + P[((id+s)%num)*3+1]*(1-t)
+local oy  = P[((id+s+1)%num)*3+2]*t + P[((id+s)%num)*3+2]*(1-t)
+local oz  = P[((id+s+1)%num)*3+3]*t + P[((id+s)%num)*3+3]*(1-t)
+
+local numl=#L/3
+local oxl = L[((id+s+1)%numl)*3+1]*t + L[((id+s)%numl)*3+1]*(1-t)
+local oyl = L[((id+s+1)%numl)*3+2]*t + L[((id+s)%numl)*3+2]*(1-t)
+local ozl = L[((id+s+1)%numl)*3+3]*t + L[((id+s)%numl)*3+3]*(1-t)
+
+ox = oxl*link + ox*(1-link)
+oy = oyl*link + oy*(1-link)
+oz = ozl*link + oz*(1-link)
+
+obj.ox = ox*affect + obj.ox*(1-affect) -- obj.x*(affect)*ck
+obj.oy = oy*affect + obj.oy*(1-affect) -- obj.y*(affect)*ck
+obj.oz = oz*affect + obj.oz*(1-affect) -- obj.z*(affect)*ck
+
+if not (obj.check0) then
+	local temp = pos
+	for i=1,#pos do
+		temp[i] = math.floor(pos[i])
+	end
+	rikky_module.setdialogparam("pos",temp)
+end
+
+if id==0 then
+	GVA[n] = {}
+end
+
+table.insert(GVA[n],obj.ox+obj.x*ck)
+table.insert(GVA[n],obj.oy+obj.y*ck)
+table.insert(GVA[n],obj.oz+obj.z*ck)
+
+if cl==1 then GVA[n]=nil end
+
+if view==1 then
+   obj.draw(0,0,0,1,.2)
+   obj.setfont("",20)
+   rikky_module.textload(obj.index+1) --,align,center,tategaki
+   obj.draw(P[id*3+1],P[id*3+2],P[id*3+3])
+ end

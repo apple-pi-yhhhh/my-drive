@@ -1,0 +1,511 @@
+---------------------------------------------------------------------
+@TA-Easeing
+---------------------------------------------------------------------
+
+--track0:時間[s],0.01,10,0.50,0.01
+--track1:間隔[s],0,10,0.05,0.01
+--track2:拡大率,0,1000,100
+--track3:進行度,0,100,0,0.01
+--check0:進行度使用,0
+--dialog:退場有り/chk,local OUT_on=1; フェード,local fade=1;加減速[-41/5],local beki=2;退場時イーズ反転/chk,local ease_R=0;X距離,local x=0;Y距離,local y=20;XY交互/chk,local mutually=0; Z距離,local z=0;X軸回転,local rx=0;Y軸回転,local ry=0;Z軸回転,local rz=0;リサイズ,local RS=0;入/退場順[0/5],local jun=0;ブラー[-100/100],local blur=0;seed,local seed=0;グラフ表示/chk,local info=0;
+
+--[[
+
+さつきさんのTA標準登場にイージングスクリプトを内蔵したものです。
+
+イージングスクリプト easing.lua がpluginsフォルダにあれば動くはずです。
+
+持っていない方は是非導入を。
+
+http://www.nicovideo.jp/watch/sm20813281 (Undofishさんの イージングスクリプト トラックバー対応版)
+
+
+ ■ダイアログ設定■
+
+◇ イージングを使う場合は加減速にマイナスの値を入れます。
+
+◇ 進行度使用にチェックを入れた場合は自動では動かず、トラックバーの進行度を使用して動作させます。
+
+◇ フェードは 1=通常フェード、 2=点滅、  3=点滅*通常フェードです。 (マイナス指定だとフェードはイージングに合わせます。)
+
+
+◆ ダイアログは全て数値以外の入力も可能になっています。
+
+  ・  通常の数値                        //        200 = 入場/退場共に 200
+
+  ・  テーブルだと {In,Out} を別に指定  //  {50,-100} = 入場時 50 , 退場時 -100
+
+  ・  空欄なら範囲固定ランダム          //       nil  = (-50 , 50)  の範囲でランダム (50固定,空欄時エラー回避用)
+
+
+◆ 文字列で指定すると幾つかのオプションが付きます。 文字列は " や ' で囲みます。 //  "299" や '-100' 等です。
+
+  ・  文字列で数値                      //     "300"  = 入場/退場共に 300
+
+  ・  カンマで区切ると入退場を別に指定  // "-500,100" = 入場時 -500 , 退場時 100
+    
+  ・  数値の前に @ を付けると正負交互  //      "@100" = -100, 100 を交互に使用
+   
+  ・  数値の前に R を付けるとランダム   //     "R300" = (-300,300)の間でランダム
+
+  ・  数値の前に r を付けるとランダム　 //     "r300" = (0   ,300)の間でランダム
+    
+  ・ "rot" = 中央を向く(Z軸回転のみの動作のおまけ、ちゃらんぽらんな動作)
+  
+  ※ カンマの区切りとの併用可  "R-100 , @300"
+
+
+◇ ブラーはプラスの値でぼかし、マイナスの値だと方向ブラーになります。方向ブラーは簡易的な自動方向ブラーになっています。
+
+   ※テキストで入力した場合、マイナスの且つ数値の頭に b を付けると移動速度と無関係な通常の方向ブラーを使います。 ("b -20" = 強さ20の方向ブラー)
+
+
+◇ グラフ表示は赤が変化値グラフ、緑が速度グラフです(速度グラフはイージング使用時のみ)
+
+
+]]
+
+
+---------------------------------ダイアログ入力値振り分け関数
+local Tb = function(value,index)
+local T  = value
+local RT = {}
+local OPT=0
+local v
+
+if not index then 
+index=obj.index
+else 
+index=obj.index+index 
+end
+
+ if not value then
+    return rand(-50,50,obj.index+seed,seed),OPT
+
+ elseif tostring(value)==T then
+  T = string.gsub(value,"%s","")
+  
+--++--++--++
+  local T_func=function(value)   
+   if string.find(value,"@")==1 then
+      value = string.gsub(value,"@","")
+      v = tonumber(value)
+        --T = v * math.cos(math.pi*(index)) 
+      T = v
+      if index%2==0 then T = -v end
+   elseif string.find(value,"b")==1 then
+      value = string.gsub(value,"b","")
+      v = tonumber(value)
+      OPT = 1
+      T = v
+   elseif string.find(value,"R")==1 then
+       value = string.gsub(value,"R","")
+      local v = tonumber(value)
+      T = rand(-v,v,index+value*seed,index)
+   elseif string.find(value,"r")==1 then
+      value = string.gsub(value,"r","")
+      v = tonumber(value)
+      T = rand(0,v,index+value*seed,index)
+   else
+      T = tonumber(value)
+   end
+   return T ,OPT
+  end
+--++-++--++  
+
+  if string.find(T,",") then
+    local n = string.find(T,",")
+    if flag or obj.totaltime/2<obj.time then
+      return T_func(string.sub (T, n+1)),OPT
+    else
+      return T_func(string.sub (T, 1 , n-1)),OPT
+    end
+  else
+  return T_func(T),OPT
+  end
+
+ elseif string.find(tostring(value),"table") then
+    if flag or obj.totaltime/2<obj.time then
+     return T[2] ,OPT
+    else 
+     return T[1] ,OPT 
+    end
+
+ else
+  return T ,OPT
+ end
+end
+
+
+local limiter=function(v,mn,mx)
+if not mn then mn,mx=0,1 end
+return math.max(mn,math.min(mx,v))
+end
+
+----------------------------Easing function
+Twinner = function(number, t, min, max ,v_min, v_max  ,over)
+--敢えてグローバル
+--number : Easing number (0か1だとリニア,マイナスでイーズIn,Outを入れ替え(muimi))
+--     t : time
+--   min : start_time
+--   max : end_time
+-- v_min : start output value
+-- v_max : end output value
+--  over : ~=nil desable limiter(v_min,v_max)
+
+--Undofish さんのeasingaviutl.luaからの引用しています。
+local E = require("easing")
+local E_type = {
+		E.linear				,--  1
+		E.inQuad				,--  2
+		E.outQuad				,--  3
+		E.inOutQuad				,--  4
+		E.outInQuad				,--  5
+		E.inCubic 				,--  6
+		E.outCubic				,--  7
+		E.inOutCubic			,--  8
+		E.outInCubic			,--  9
+		E.inQuart				,-- 10
+		E.outQuart				,-- 11
+		E.inOutQuart			,-- 12
+		E.outInQuart			,-- 13
+		E.inQuint				,-- 14
+		E.outQuint				,-- 15
+		E.inOutQuint			,-- 16
+		E.outInQuint			,-- 17
+		E.inSine				,-- 18
+		E.outSine				,-- 19
+		E.inOutSine				,-- 20
+		E.outInSine				,-- 21
+		E.inExpo				,-- 22
+		E.outExpo				,-- 23
+		E.inOutExpo				,-- 24
+		E.outInExpo				,-- 25
+		E.inCirc				,-- 26
+		E.outCirc				,-- 27
+		E.inOutCirc				,-- 28
+		E.outInCirc				,-- 29
+		E.inElastic				,-- 30
+		E.outElastic			,-- 31
+		E.inOutElastic			,-- 32
+		E.outInElastic			,-- 33
+		E.inBack				,-- 34
+		E.outBack				,-- 35
+		E.inOutBack				,-- 36
+		E.outInBack				,-- 37
+		E.inBounce				,-- 38
+		E.outBounce				,-- 39
+		E.inOutBounce			,-- 40
+		E.outInBounce			,-- 41
+	}
+if not (min) then min,max = 0,1 end
+if not (v_min) then v_min, v_max = 0,1 end
+
+if not over then 
+      t  =  math.max(min,math.min(max,t))
+end
+
+      t  =  t/(max-min) - min/(max-min)  -- 0 to 1 linear
+local c  =  v_max - v_min
+local tv =  c * t + v_min                -- v_min to v_max linear
+
+ if number==0 then
+  return tv , tv, t
+ elseif number<0 then
+  return v_max - E_type[-number](1-t,v_min ,c,1) + v_min, tv, t
+ else
+  return         E_type[ number](t  ,v_min ,c,1) ,tv,t
+ end
+
+end
+
+
+----------------------- さつきさんのTAからindexシャッフル部をお借りしています
+local id = obj.index
+
+local shuffle=function(jun,seed)
+if(jun<1) then
+  id=obj.index --順番に登場
+elseif(jun<2) then
+  id=obj.num-1-obj.index --後ろから登場
+elseif(jun<3) then
+  local indexes = {}
+  for i=0,obj.num-1 do
+    indexes[i+1]=i
+  end
+  for i=0,obj.num-1 do
+    local dest = 0
+    dest=rand(0,obj.num-1, -obj.num,i+1)
+    local swap      = indexes[i+1]
+    indexes[i+1]    = indexes[dest+1]
+    indexes[dest+1] = swap
+  end
+  id=indexes[id+1] --ランダム順に登場
+elseif(jun<4) then
+  id=rand(0,100*(obj.num-1),obj.index,seed)/100    --ランダム間隔に登場
+elseif(jun<5) then
+  id=math.abs((obj.num-1)/2-obj.index)          --内側から登場
+else
+  id=(obj.num-1)/2-math.abs((obj.num-1)/2-obj.index) --外側から登場
+end
+
+return id
+end
+
+
+-------------------------
+
+
+x  = Tb(x)
+y  = Tb(y)
+
+if mutually==1 then
+x =  x * math.cos(math.pi/2*(obj.index))
+y =  y * math.cos(math.pi/2*(obj.index+1))
+end
+
+z  = Tb(z)
+rx = Tb(rx)
+ry = Tb(ry)
+if rz~="rot" then rz = Tb(rz) end -- rz = "rot" の場合は別動作
+if beki==0 then beki=1 end        -- beki == 0は困るんどす
+beki = math.floor(Tb(beki))
+beki= math.min(10,math.max(-41,beki))
+
+RS = Tb(RS)
+
+fade=Tb(fade)
+fade=limiter(fade,-3,3)
+
+jun = Tb(jun)
+jun = math.min(5,math.abs(jun))
+
+
+id = shuffle(jun,seed)
+
+------------------------------------------------------
+local progress ,interval = obj.track0 ,obj.track1
+local time ,totaltime = obj.time ,obj.totaltime
+local frame = obj.frame
+
+local track3 = obj.track3
+
+if obj.check0 then
+time = (interval * obj.num + progress)/100 * track3
+frame = time*obj.framerate
+Out_on=0
+end
+
+local min = id * interval
+local max = min + progress
+local Endtime = totaltime - (interval * obj.num + progress)
+   if jun>3 then 
+      Endtime = totaltime - (interval * obj.num/2 + progress)
+    end    
+      Endtime = time - Endtime
+
+ --S_E ={limiter(time+min-max),limiter(Endtime/(interval+ progress))}
+ 
+flag = (0 < Endtime/(interval+ progress))
+if obj.check0 then flag = obj.time>obj.totaltime/2 end
+
+local number = -beki
+if (beki>=0) then number = 0 end
+
+local endnumber = number
+if (ease_R==1) then endnumber = -number end
+
+local IN ,Iv = Twinner(number,   time, min,max)
+local OUT,Ov = 1,1
+if OUT_on==1 then
+      OUT,Ov = Twinner(endnumber,Endtime ,min,max,1,0)
+end
+
+local IO = 1-(IN*OUT) -- Ease
+local LI = 1-(Iv*Ov)  -- Linear
+
+if (beki>0) then IO = LI^beki end
+
+
+
+if LI > 0 then 
+----------------------------透明度周りの処理
+
+ local alp = limiter(IO)
+ if fade>0 then alp = (LI) end
+
+fade = math.abs(fade)
+ if alp>0.00000001 then
+  if(fade==1) then
+    obj.alpha = obj.alpha*(1-alp)          --通常フェード
+  elseif (fade==2) then 
+    obj.alpha=obj.alpha*(frame%2)          --点滅
+  elseif (fade==3) then
+    obj.alpha=obj.alpha*(frame%2)*(1-alp)  --点滅 * 通常フェード
+  end
+ end
+--------------------------座標
+
+  local XY="X"
+  if (RS<0) then XY,RS ="Y",-RS end
+  obj.effect("リサイズ",XY,100+RS*IO)
+  obj.ox = obj.ox + x*IO
+  obj.oy = obj.oy + y*IO
+  obj.oz = obj.oz + z*IO
+  obj.rx = obj.rx + rx*IO
+  obj.ry = obj.ry + ry*IO
+  if rz=="rot" then rz = math.deg(math.atan2(obj.oy,obj.ox))%180 - 90  end
+  obj.rz = obj.rz + rz*IO
+  obj.zoom = obj.zoom + IO*(obj.track2-100)/100
+ 
+--------------------------ブラー
+ local OPT = 0
+ blur, OPT = Tb(blur)
+
+
+ if blur>0 then
+    obj.effect("ぼかし","範囲",blur*IO)
+  elseif blur<0 then
+    if OPT==1 then
+      obj.effect("方向ブラー","範囲",-blur*IO,"角度",90-obj.rz+math.deg( math.atan2((obj.oy+y)-obj.oy,(obj.ox+x)-obj.ox))) 
+    elseif OPT==0 then
+    
+    if VEL_G==nil then VEL_G={} end
+    if VEL_G[obj.layer]==nil then VEL_G[obj.layer]={} end
+    if VEL_G[obj.layer][obj.index+1] == nil then VEL_G[obj.layer][obj.index+1] = {obj.ox, obj.oy} end
+
+    local X,Y=VEL_G[obj.layer][obj.index+1][1],VEL_G[obj.layer][obj.index+1][2]
+    local velocity = math.sqrt((X-obj.ox)^2 + (Y-obj.oy)^2)
+       velocity = velocity / 50
+
+    local bl=math.min(-blur-1,-blur*(velocity))
+    obj.effect("方向ブラー","範囲",bl,"角度",90-obj.rz+math.deg( math.atan2((obj.oy+y)-obj.oy,(obj.ox+x)-obj.ox))) 
+    VEL_G[obj.layer][obj.index+1] = {obj.ox, obj.oy}
+  end
+ end
+
+end
+
+if time==totaltime then 
+VEL_G[obj.layer]=nil 
+flag = nil 
+end
+
+
+
+-------------------グラフ表示
+
+if info==1 then
+
+  if (flag and OUT_on==1) then number = endnumber end
+ local ZOOM=100/obj.getvalue("zoom")
+ if obj.index==obj.num-1 then
+  obj.draw()
+  
+  local size = 100
+  obj.load("figure","四角形",0xfaf9f9,size+6,1000)
+  obj.draw(0,0,0,ZOOM,0.85,-obj.getvalue("rx"),-obj.getvalue("ry"),-obj.getvalue("rz"))
+
+  obj.load("figure","円",0xfa174f,14*size/100)
+ if beki<0 then
+    for j=0,1,1/100 do
+      local x = j*size - size/2
+      local y = Twinner(number,j,0,1,0,-size,1) + size/2
+     obj.draw(x,y,0,  1/4*ZOOM,1)
+    end
+   obj.load("figure","円",0x28ac9f,10*size/100)
+     for j=0,100 do
+      local x = j*size/100 - size/2
+      local y  = Twinner(number,j  ,0,100,  0,-size)
+      local y2 = Twinner(number,j-1,0,100,  0,-size,"over")
+     obj.draw(x, (y-y2)*5 ,0,  1/5*ZOOM,0.9)
+    end
+
+  else
+ 
+    for j=0,1,1/100 do
+     local x = j*size - size/2
+     local y = ((1-j)^math.max(1,beki)*size) - size/2
+     obj.draw(x,y,0, 1/4*ZOOM,1)
+    end
+  
+  end
+  obj.load("figure","四角形",0xeae9c9,size+22,10)
+  obj.draw(0,0,0, ZOOM,1/2,-obj.getvalue("rx"),-obj.getvalue("ry"),-obj.getvalue("rz"))
+ end
+end
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+@ランダムアンカー
+------------------------------------------------------------------------------------------------------------------------
+--track0:影響度,-200,200,100
+--track1:seed,-2000,2000,0,1
+--track2:zoom,-1000,1000,100
+--track3:配置固定,0,4,0,1
+--dialog:配置固定,local AA=0;
+--[[
+中心点を四隅の何処かにランダムに移動させます。(配置固定が0の場合)
+TAの拡大率や回転などと組み合わせて使用するのためのオプションです。
+※オブジェクト本体の拡大率には影響を受けません。
+ダイアログの配置固定はトラックバーの配置固定と同じ意味ですが
+トラックバーの配置固定を1 且つ ダイアログの配置固定に obj.index を入力すると中心点が四隅を巡回します。
+]]
+local amo=obj.track0/100
+local seed=obj.track1
+local A = math.floor(obj.track3)
+local w,h=obj.getpixel()
+w,h=w/2,h/2
+local cx,cy=obj.cx,obj.cy
+local zoom=obj.getvalue("zoom")/100
+
+local C={}
+C[1]={-w ,-h };C[2]={w ,h };C[3]={w ,-h };C[4]={-w ,h }
+C[5]={-w/2,-h/2};C[6]={w/2,h/2};C[7]={w/2,-h/2};C[8]={-w/2,h/2}
+local R=math.floor(rand(100,499,(obj.index+1)*(seed),obj.index)/100)
+
+AA = (obj.track3+AA)%4+1
+if (obj.track3>0) then R = math.floor(AA) end
+
+obj.cx =  C[R][1]*amo
+obj.cy =  C[R][2]*amo
+obj.ox=obj.ox+(obj.cx-cx)*zoom 
+obj.oy=obj.oy+(obj.cy-cy)*zoom
+
+obj.zoom=obj.zoom*obj.track2/100
+
+
+---------------------------------------------------------------------
+@個別円形
+---------------------------------------------------------------------
+--track0:距離,0,2000,200
+--track1:拡大率,0,800,100
+--track2:回転,-360,360,0
+--track3:変換%,0,100,100
+--check0:外向き,0
+--dialog:回転なし/chk,local no_rot=0;文字数変更,local NUM=0;回転加算,local rotplus=90;
+
+      AF = obj.track3/100
+local UF = 1-AF
+
+local  r = math.rad( 360*obj.index/(obj.num+NUM)+obj.track2 )
+local  x = math.sin(r)*obj.track0*obj.track1/100
+local  y = -math.cos(r)*obj.track0*obj.track1/100
+obj.zoom = obj.zoom*obj.track1/100
+local rz = 360*obj.index/(obj.num+NUM) + obj.track2
+
+obj.rz=obj.rz*UF + (rz + rotplus)*AF + obj.getvalue("rz")
+obj.ox=obj.ox*UF +  x*AF
+obj.oy=obj.oy*UF +  y*AF
+
+if no_rot==1 then 
+ obj.rz=obj.getvalue("rz")
+else
+if(obj.check0) then
+  obj.ox =-obj.ox
+  obj.rz =-obj.rz-180
+end
+end

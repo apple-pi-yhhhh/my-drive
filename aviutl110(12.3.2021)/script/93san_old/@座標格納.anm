@@ -1,0 +1,496 @@
+@座標格納(親)
+--track0:全体%,-1000,1000,100
+--track1:X,-500,500,0
+--track2:Y,-500,500,0
+--track3:Z,-500,500,0
+--check0:格納を実行,0
+--dialog:名前を付ける,local name="";配置ﾊﾟﾀｰﾝのみ/chk,local refpoint=0;座標を追加合成,local ADD_name={};追加後の名前,local newname="";追加実行/chk,local Merge=0;
+
+--[[
+単体、または個別オブジェクトの座標を名前付きで格納します。座標格納(子)等で呼び出せます。
+GVA["付けた名前".."3D"]       --> {x,y,z    ,x,y,z   ,x,y,z...}
+GVA["付けた名前".."nest"]     --> {{x,y,z} ,{x,y,z} ,{x,y,z}...}
+と言う形で保存されています。
+
+また「座標の追加」に  {"追加したい座標の名前A" ,  "追加したい座標の名前A"} 
+
+と " " で囲って座標の名前を記入、追加実行にチェックを入れると座標を合成します。
+
+全体的に何に使うの？言う感じのスクリプトですがテツさんのカスタムオブジェクト「格子線」で使うと楽しいですよ。(というかそれ用)
+
+]]
+
+if GVA==nil then GVA={} end
+
+function M_NEST(add_name)
+local ADD_name=add_name -- name={"A","B","C"} テキストが入ったテーブル
+local M_Nest  = {} -- ここに並べる nest用
+local M_Array = {} -- 一列用
+local M_Alpha = {}
+
+ for i=1,#ADD_name do
+ for j = 1,#GVA[ADD_name[i].."nest"] do 
+   table.insert(M_Alpha,GVA[ADD_name[i].."alpha"][j])
+   table.insert(M_Nest,GVA[ADD_name[i].."nest"][j])
+  end
+ end
+
+ for i =1,(#M_Nest) do
+  for j=1,3 do
+   table.insert(M_Array,M_Nest[i][j])
+  end
+ end
+return M_Array,M_Nest,M_Alpha
+end
+
+function R_NEST(name,U_index)
+U_index=U_index or {}
+local ID=obj.index+1
+local V=GVA[name.."nest"]
+
+local NEST={}
+if #U_index>0 then
+  for i=1,#U_index do
+   NEST[i]=V[U_index[i]]
+  end
+else
+ NEST=V
+end
+local Array={} 
+ for i =1,(#NEST) do
+  for j=1,3 do
+   table.insert(Array,NEST[i][j])
+  end
+ end
+return Array,NEST
+end
+
+
+if name=="" then name=""..obj.layer end
+local ALL,X,Y,Z=obj.track0/100,obj.track1,obj.track2,obj.track3
+local alp = obj.alpha
+if obj.num < 2 then alp=obj.alpha*obj.getvalue("alpha") end
+
+if (obj.check0) then
+
+local x,y,z = obj.ox+obj.x ,obj.oy+obj.y ,obj.oz+obj.z
+ if refpoint==1 then --配置のみ保存
+  x,y,z = obj.ox, obj.oy, obj.oz 
+ end
+ x,y,z=(x+X)*ALL,(y+Y)*ALL,(z+Z)*ALL
+
+
+if obj.index==0 then 
+ GVAmulti={} 
+ GVAalpha={} 
+end
+  GVAmulti[obj.index+1]={x,y,z}
+  GVAalpha[obj.index+1]=alp
+
+ GVA[name.."alpha"]=GVAalpha
+
+if (obj.num > 1) then 
+  GVA[name.."nest"]=GVAmulti
+  GVA[name.."3D"]=R_NEST(name)
+ else
+  GVA[name.."nest"]={}
+  GVA[name.."nest"][1]={x,y,z} 
+ end
+
+--結合処理
+
+if Merge==1 then
+ table.insert(ADD_name,1,name) --自分の配置を頭に追加
+ local A,M = M_NEST(ADD_name)  --結合
+    if (newname=="") then newname=name end --名前空欄なら上書き
+  GVA[newname.."nest"]=M
+  GVA[newname.."3D"]=A
+end
+
+--チェックボックスobj.check0を外すと中身を空にして終了
+
+else
+
+GVA[name.."3D"]=nil
+GVA[name.."nest"]=nil
+GVA[newname.."3D"]=nil
+GVA[newname.."nest"]=nil
+--table.remove(GVA["list"],LIST)
+
+end 
+
+
+
+
+
+---------------------------------------------------
+---------------------------------------------------
+
+
+@座標格納(子)
+--track0:Affect,0,100,100
+--track1:X%,-500,500,100
+--track2:Y%,-500,500,100
+--track3:Z%,-500,500,100
+--check0:全体回転,0
+--dialog:他の座標を使う/chk,local extuse=1;呼び出す対象,local name="";配置ﾊﾟﾀｰﾝのみ/chk,local glo=0;個別位置指定,local TE={};透明度/chk,local use_alpha=0;今の配置に名前,local newname="";配置格納実行/chk,local New_name=0;pos,A_ANK={};Affect加算,local ext_affect=0
+
+--[[
+ 「座標格納(親)」を使った配置を流し込む方向で使うスクリプトです。
+
+他の座標を使うのチェックを外すとアンカーポイントで位置を指定します。
+
+index指定は 例えば五文字のテキストの場合に {0,0,0,0,0} と5文字分の配列を用意して{1,0,4,2,3} 何処にどのオブジェクトをくっ付けるかを指定できます。
+
+配列の位置が自分のindex,入力した数値が相手のindexです。数値が0だとその部分は移動しません。
+]]
+
+
+if GVA==nil then GVA={} end
+local affect=obj.track0/100 + ext_affect/100
+local ID=obj.index+1
+local V=GVA[name.."nest"]
+local X,Y,Z = obj.track1/100,obj.track2/100,obj.track3/100
+
+local type = function(v)
+local v = v
+local s = tostring(v)
+if(s == v)then return "string" end
+if(s == "nil")then return "nil" end
+if(string.find(s, "table:"))then return "table" end
+return "number"
+end
+
+
+--簡易版GetAudio--------------------------------(主にダイアログ、個別オブジェクトのスクリプト制御で使う用)
+
+function AudioSP(div,freq,exp)
+--div(分割数)[,freq(配列の位置),exp(0~1の範囲で動く値に変換,expはバッファの最大値)]
+buf={}
+
+if div==nil then div,freq,exp=1,1,4000 end --引数省略で全体音量を 0超過、1以下の値で返す
+val = obj.getaudio(buf,"audiobuffer","spectrum",div)
+
+if freq==nil then  --divのみだとbufテーブルを返す
+return buf
+elseif exp==nil then --exp省略で指定のbufを返す
+val=buf[freq]
+return val
+elseif exp<0 then
+val=math.exp(buf[freq]/exp) --指定したbufの最大値(expで指定)を、0超過、1以下の値で返す(反転)
+return val
+else
+val=1-(exp/math.exp(buf[freq]/exp))/exp --指定したbufの最大値(expで指定)を、0超過、1以下の値で返す(反転)
+return val
+end
+end
+--------------------------obj.alpha=AudioSP(obj.num,obj.index+1,4000);obj.oy=AudioSP(obj.num,obj.index+1)/500;--等
+
+
+--配置入れ替えを関数で登録 (カスタムオブジェクトの座標にダイレクトに入れる用途)-------------------
+--nameに格納で付けた名前を入れると Array={x,y,z,x,y,z...} と NEST={{x,y,z},{x,y,z}...}の二つを吐き出します
+
+function R_NEST(name,U_index)
+U_index=U_index or {}
+local ID=obj.index+1
+local V=GVA[name.."nest"]
+
+local NEST={}
+if #U_index>0 then
+  for i=1,#U_index do
+   NEST[i]=V[U_index[i]]
+  end
+else
+ NEST=V
+end
+
+local Array={} 
+ for i =1,(#NEST) do
+  for j=1,3 do
+   table.insert(Array,NEST[i][j])
+  end
+ end
+return Array,NEST
+end
+
+--配置入れ替え関数登録終わり---------R_NEST("配置名")--配置すべて // R_NEST("配置名",{3,1,6})--指定したindexだけ
+
+
+--座標追加結合を関数で登録----------(カスタムオブジェクトの座標にダイレクトに入れる用途)
+--add_name は座標を格納した文字列の入ったテーブル {"U","H","F"}
+--[[
+function M_NEST(add_name)
+local ADD_name=add_name
+local MergeNest  = {} -- ここに並べる nest用
+local MergeArray = {} -- 一列用
+
+ for i=1,#ADD_name do
+  for j = 1,#GVA[ADD_name[i].."nest"] do 
+   table.insert(MergeNest,GVA[ADD_name[i].."nest"][j])
+  end
+ end
+
+ for i =1,(#MergeNest) do
+  for j=1,3 do
+   table.insert(MergeArray,MergeNest[i][j])
+  end
+ end
+return MergeArray,MergeNest  -- 一列座標、入れ子座標を返す
+end
+]]
+--座標追加結合を関数で登録終わり-------------------MERGE_NEST({"Upos","Ipos","SOMEpos"})
+
+--カラーパターン--------------------------------------------------------------------
+--require("Colorize")
+--local COL_T=Colorize_tbl()
+
+
+--テツさん製のfunctionです。座標配列の回転をしてくれます。格子線が既にプロジェクトにロードされている場合は不要。(ですがないとエラーに)------------
+
+local function Rotate_ALL(pos,RX,RY,RZ)
+--x軸周り回転関数
+local function Rot_x(x,y,z,angle)
+ local x2,y2,z2
+ x2=x
+ y2=y*math.cos(angle)-z*math.sin(angle)
+ z2=y*math.sin(angle)+z*math.cos(angle)
+ return x2,y2,z2
+end
+--y軸周り回転関数
+local function Rot_y(x,y,z,angle)
+ local x2,y2,z2
+ x2=x*math.cos(angle)+z*math.sin(angle)
+ y2=y
+ z2=-x*math.sin(angle)+z*math.cos(angle)
+ return x2,y2,z2
+end
+--z軸周り回転関数
+local function Rot_z(x,y,z,angle)
+ local x2,y2,z2
+ x2=x*math.cos(angle)-y*math.sin(angle)
+ y2=x*math.sin(angle)+y*math.cos(angle)
+ z2=z
+ return x2,y2,z2
+end
+--全回転
+
+local function Rot(x,y,z,rx,ry,rz)
+ local x2,y2,z2
+ x2,y2,z2=Rot_z(x,y,z,rz)
+ x2,y2,z2=Rot_y(x2,y2,z2,ry)
+ x2,y2,z2=Rot_x(x2,y2,z2,rx)
+ return x2,y2,z2
+end
+
+ local pos_num=#pos/3
+ for i=1,pos_num do
+   pos[3*i-2],pos[3*i-1],pos[3*i]=Rot_z(pos[3*i-2],pos[3*i-1],pos[3*i],math.rad(RZ))
+   pos[3*i-2],pos[3*i-1],pos[3*i]=Rot_y(pos[3*i-2],pos[3*i-1],pos[3*i],math.rad(RY))
+   pos[3*i-2],pos[3*i-1],pos[3*i]=Rot_x(pos[3*i-2],pos[3*i-1],pos[3*i],math.rad(RX))
+ end
+ return pos
+end
+
+--格子線function終わり---------------------------------------------
+
+--TE=TE or {}
+
+if extuse==1 then --(;他の座標を使う/chk,local extuse=0)
+
+local NEST=V
+
+--++local TE={1,10,3,4,5,6,7,8,9,2} --自身のindex変更 (ダイアログ ;位置を指定,local TE={})
+local TER=TE[ID]
+ if (#TE==0 or TE==nil) then 
+  TER=ID 
+ end
+
+if use_alpha==1 then
+obj.alpha=obj.alpha*GVA[name.."alpha"][TER]
+end
+
+--if D2==1 then 
+--for i=1,NEST do
+--table.remove(NEST[i],NEST[i][3])
+--end
+
+if obj.check0 then
+ local AR={}
+ local NR={}
+   for i =1,(#NEST) do
+    for j=1,3 do
+     table.insert(AR,NEST[i][j]) --入れ子をばらしてからfunction Rotate_ALL へ、手抜き
+    end
+   end 
+
+  AR=Rotate_ALL(AR,obj.getvalue("rx"),obj.getvalue("ry"),obj.getvalue("rz"))
+  for i=0,(#AR/3)-1 do
+    NR[i+1]={AR[i*3+1],AR[i*3+2],AR[i*3+3]} --入れ子にしてNESTに戻す
+  end
+NEST=NR
+end
+
+local x,y,z=unpack(NEST[TER])
+
+--円形
+local posR={}
+if name=="円形配置" then
+local rad=obj.getvalue("rz")--半径
+for i=1,num do
+local r = 360*(i)/obj.num+obj.getvalue("rz")
+posR[i+1]={-math.cos(math.pi/180*r)*rad+obj.x , math.sin(math.pi/180*r)*rad +obj.y,0}
+end
+x,y,z=unpack(posR[TER])
+end
+--
+
+x=(x*affect)*X
+y=(y*affect)*Y
+z=(z*affect)*Z
+
+if glo==0 then
+x = x-(obj.x*affect)
+y = y-(obj.y*affect)
+z = z-(obj.z*affect)
+end
+
+obj.ox=x+(obj.ox-obj.ox*affect)
+obj.oy=y+(obj.oy-obj.oy*affect)
+obj.oz=z+(obj.oz-obj.oz*affect)
+
+else -- if extuse==0 (アンカーを使う)
+
+local NEST={}
+
+obj.setanchor("A_ANK",obj.num,"xyz")
+
+local pos=A_ANK
+
+if obj.check0 then
+  pos=Rotate_ALL(pos,obj.getvalue("rx"),obj.getvalue("ry"),obj.getvalue("rz"))
+end
+
+local VP=pos 
+local T={}
+for i=0,(#VP/3)-1 do
+T[i+1]={VP[i*3+1],VP[i*3+2],VP[i*3+3]}
+end
+
+
+local TER=TE[ID] 
+  if (TE==nil or #TE==0 )then 
+   TER=ID 
+  end 
+
+
+local x,y,z=unpack(T[TER])
+
+x=(x*affect)*X
+y=(y*affect)*Y
+z=(z*affect)*Z
+
+if glo==0 then
+x = x-(obj.x*affect)*X
+y = y-(obj.y*affect)*Y
+z = z-(obj.z*affect)*Z
+end
+
+obj.ox=x+(obj.ox-obj.ox*affect)
+obj.oy=y+(obj.oy-obj.oy*affect)
+obj.oz=z+(obj.oz-obj.oz*affect)
+end
+
+
+
+--再配置後の位置を新しい名前で並べる
+
+if New_name==1 then
+if obj.index==0 then GVAmulti={} end
+
+if (new_name=="") then 
+   new_name=name end --空欄なら呼び出した配置を上書き
+
+
+  local Array={}
+  if obj.index==0 then GVAmulti={} end
+  GVAmulti[obj.index+1]={obj.x+obj.ox,obj.y+obj.oy,obj.z+obj.oz}
+   for i =1,(#GVAmulti) do
+    for j=1,3 do
+     table.insert(Array,GVAmulti[i][j])
+    end
+   end
+  GVA[newname.."nest"]=GVAmulti
+  GVA[newname.."3D"]=Array
+else
+  GVA[newname.."nest"]=nil
+  GVA[newname.."3D"]=nil
+end
+
+
+@座標のリンク
+--track0:親レイヤ,0,100,0,1
+--track1:座標倍率,-500,500,100
+--track2:回転倍率,-500,500,100
+--track3:レイヤ影響度,-500,500,0
+--check0:座標上書き,1
+--dialog:透明度/chk,local alp=0;拡大率/chk,local zom=0;座標(親)を使う/chk,local gva=0;呼び出し対象,local name="";↑(index指定),local idx={}
+
+
+if (idx == nil) then 
+idx={}
+idx[obj.index+1]=obj.index+1
+end
+
+local LV  = obj.layer/10*obj.track3/100
+local GV  = obj.getvalue
+local L   = math.floor(obj.track0)
+local o,r = obj.track1/100, obj.track2/100
+o=o+o*LV
+r=r+r*LV
+
+local x,y,z, rx,ry,rz, alpha,zoom=0,0,0, 0,0,0 ,obj.alpha,obj.zoom
+if gva==1 then
+     
+    if (idx[obj.index+1]==nil or idx[obj.index+1]==0) then 
+      x,y,z    = 0,0,0
+    else
+      x,y,z    = GVA[name.."nest"][idx[obj.index+1]][1],GVA[name.."nest"][idx[obj.index+1]][2],GVA[name.."nest"][idx[obj.index+1]][3]
+    end 
+else
+      x,y,z    = GV("layer"..L..".x"),GV("layer"..L..".y"),GV("layer"..L..".z")
+
+      rx,ry,rz = GV("layer"..L..".rx"),GV("layer"..L..".ry"),GV("layer"..L..".rz")
+      alpha    = GV("layer"..L..".alpha")
+      zoom     = GV("layer"..L..".zoom")/100
+
+end
+
+
+if (obj.check0) then
+obj.ox=x*o
+obj.oy=y*o
+obj.oz=z*o
+
+obj.rx=GV("rx")+rx*r
+obj.ry=GV("ry")+ry*r
+obj.rz=GV("rz")+rz*r
+
+else
+obj.ox=obj.ox+x*o
+obj.oy=obj.oy+y*o
+obj.oz=obj.oz+z*o
+
+obj.rx=GV("rx")+obj.rx+rx*r
+obj.ry=GV("ry")+obj.ry+ry*r
+obj.rz=GV("rz")+obj.rz+rz*r
+
+end
+
+if alp==1 then
+obj.alpha=obj.alpha*alpha
+end
+
+if zom==1 then
+obj.zoom=obj.zoom*zoom
+end
+

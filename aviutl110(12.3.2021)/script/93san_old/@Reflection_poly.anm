@@ -1,0 +1,653 @@
+--[[
+このスクリプトは反射っぽい表現のあるの板ポリを表示する、ただそれだけのものです。
+
+
+１、まず何らかオブジェクトに 「Reflection-Getpixel」をつけます。
+  グラデーションやノイズを載せておくとMapで変形します。
+
+２、設定ダイアログの[LightLayer]にライト代わりにしたいオブジェクトのあるレイヤーを入れます。
+  ライトは複数設定可能です。
+  ※「Lightオブジェクト化」をつけるとそのオブジェクトを自動でライトとして認識します。
+  ライトの強度はライトオブジェクトの拡大率になります。
+
+3,新たに別のレイヤーに図形を用意し「Reflection-Draw」 をつけて表示します。このレイヤーは動かさないでください。
+  ※「Lightオブジェクト化」を使用している場合限定で多色ライトが使用できます。(ものすごく重たい)
+  また「Lightオブジェクト化」のstartfade,falloffも使用できます。
+
+試作品です。ライトの位置があまり正しくないようです。
+--修正しました。
+
+おまけ、
+
+「反射適用」 を使用すると普通のオブジェクトに対して反射風のエフェクトをかけることができます。中身はグラデーションです。
+一度何処かで「Reflection-Getpixel」を使用しておいて下さい。
+設定ダイアログでライトにしたいレイヤーとライトの色をを指定します。
+
+トラックバーのAllFadeを1にするとstartfadeとfalloffでライトに反応する範囲を一様に変えることができます。
+※AllFadeが0の場合はデフォルト値で固定、また下記の「ライトオブジェクト化」を使用している場合はライト個別で指定できます。
+
+「Lightオブジェクト化」を何らかのオブジェクトに使用すると自動でライトとして認識します。
+特に図形に使用した場合は図形の色をライトの色として使用します。
+[色を指定]にチェックするとカラーパレットに従います。
+※ライトの色指定とstartfade、falloffは「反射適用」専用のパラメータです。
+
+
+-- Refv というグローバル関数を出しています。
+-- local v = Refv() --でライトの光が見えるかどうかを0~1の値で出します。
+-- local v = Refv({1,2}) -- 第一引数にライトにしたいレイヤーをテーブルで入れます。
+-- obj.effect("グラデーション","強さ",100*v*v,"color",0xffffff, "color2",0xffffff,"type",0,"blend",1)
+-- --戻り値をグラデーションの強度に使ったりすると反射などに使えなくもないです。
+
+頂点の重心が間違っていたので修正
+
+
+
+]]
+
+-----------------------------------------------
+@Reflection-Getpixel
+-----------------------------------------------
+
+--track0:Scale,0,2500,300
+--track1:Random,-200,200,10
+--track2:Map,-1000,1000,0
+--track3:Wave,-1000,1000,0
+--check0:sphere,0
+--dialog:分割数,div={12,12};Lightcolor/col,col=0xf9c145;LightLayer,local li={};ClearLight/chk,local cll=0;LightIntensity,local l_=100;reflectionBoost,local ib=50;shadowDarkness,local sd=0;waveScale,w_s={100,100};waveSpeed,w_t={100,100};
+
+local l_=l_*.01
+local ib=ib*.01 + 1
+local sd=sd*.01
+local sphere = obj.check0 and 1 or 0
+col = col or 0xf9c145
+local light={}
+
+if not REFLECTION then REFLECTION={} end
+if not REFLECTION.light then REFLECTION.light={} end
+local c = 0
+
+for k,v in pairs(REFLECTION.light) do
+  if not obj.getvalue("layer"..k..".x") then
+    table.remove(REFLECTION.light,k)
+  end
+end
+
+for k,v in pairs(li) do
+  if obj.getvalue("layer"..v..".x") then
+    if not REFLECTION.light[v] then
+      REFLECTION.light[v]={col,300,2000}
+    end
+    c=c+1
+  end
+end
+
+for k,v in pairs(REFLECTION.light) do
+  if obj.getvalue("layer"..k..".x") then
+    light[k] = k
+    c=c+1
+  end
+end
+-- if c==0 then REFLECTION.light[0] ={col,200,3000} end
+
+
+if not (Vector) then Vector={} end
+if not tostring(Vector.Sub):find("function") then
+  local Sub=function(a,b) return {b[1]-a[1],b[2]-a[2],b[3]-a[3]} end
+  local Add=function(a,b) return {a[1]+b[1],a[2]+b[2],a[3]+b[3]} end
+  local Scale=function(v,s) return {v[1]*s,v[2]*s,v[3]*s} end
+  local Len=function(v) return (v[1]*v[1]+v[2]*v[2]+v[3]*v[3]) end
+  local Lensq=function(a,b) return Len( Sub(a,b) ) end
+  local Length=function(v) return (v[1]*v[1]+v[2]*v[2]+v[3]*v[3])^.5 end
+  local Normalize=function(v) local l=1/Length(v); return {v[1]*l,v[2]*l,v[3]*l},l end
+  local Cross=function(a,b) return  {a[2]*b[3]-a[3]*b[2],a[3]*b[1]-a[1]*b[3],a[1]*b[2]-a[2]*b[1]} end
+  local Dot=function(a,b) return (a[1]*b[1] + a[2]*b[2] + a[3]*b[3]) end
+  Vector = {  Sub=Sub,
+              Add=Add,
+              Scale=Scale,
+              Len=Len,
+              Lensq=Lensq,
+              Length=Length,
+              Normalize = Normalize,
+              Cross=Cross,
+              Dot=Dot}
+end
+local V = Vector
+
+local Shake=function(interval,min,max,seed,frm)
+if not min then min,max,seed=-1,1,0 end
+  local s=seed
+  local min,max=min*1000,max*1000
+  local t = obj.time*100/interval
+  local p = math.floor(t)
+  t = t-p
+  local pl={}
+  pl[1]=t
+  for i=0,3*4-1 do
+    local s = s--+math.floor(i/4)
+    pl[i+2]=rand(min,max,s,p+math.floor(i/4)+frm)*.001
+  end
+  return obj.interpolation(unpack(pl))
+end
+
+
+--点Aとポリゴン(a,b,c)の最近点を求めるNearPosOnPolygon
+local NearPoint= function(A,a,b,c)
+    local AB = V.Sub(a,b)
+    local BC = V.Sub(b,c)
+    local N = V.Normalize(V.Cross(AB,BC) ) -- (a,b,cの法線)
+    -- local Aa = Sub(A,a) --点Aと任意の点(a)のベクトル
+    local d = V.Dot( N, V.Sub(A,a) ) --法線Nとベクトル(A-a)を内積
+    local ret = V.Sub(A,V.Scale(N,d)) --内積値から平面上の最近点を求める
+    local len = V.Length(V.Sub(A,ret)) -- Aと最近点の距離
+    return ret,len
+end
+
+-- レイヤーの座標
+local GL= function(...)
+	local t,tx = {...}, {".x",".y",".z"}
+	local V,A,n = {},{},3
+	for k=1,#t do
+	A[k]={}
+	for i=0,n-1 do
+	local val = obj.getvalue("layer"..t[k]..tx[i+1])
+	V[k*3+i-n+1]  = val
+	A[k][i+1]     = val
+	end
+	end
+  if #V<1 then return end
+	return V,A
+end
+--[[
+local Field=function(pos,layer,radius,strength,container,ret)
+--local ret=1
+  local r,f,L = radius ,strength or 100,layer
+  f = f*.01
+  --f=math.max(-1,math.min(2, f))
+  local gv=obj.getvalue
+  local pos=pos or {obj.ox,obj.oy,obj.oz}
+  local ox,oy,oz = unpack(pos)
+  local xx,yy,zz = (ox+obj.x),(oy+obj.y),(oz+obj.z)
+  local x,y,z = 0,0,0
+  if tostring(L):find("table:") then
+    x,y,z = unpack(L)
+  elseif (L == nil) then
+    return ox,oy,oz,0
+  else
+    L="layer"..L
+    x,y,z=gv(L..".x"),gv(L..".y"),gv(L..".z")
+    r = radius or gv(L..".zoom")*.5
+    if gv(L..".zoom")==nil then
+      return ox,oy,oz,0
+    end
+  end
+  r = r or 200
+  local xa,ya,za=xx-x,yy-y,zz-z
+  local xb,yb,zb=x-xx,y-yy,z-zz
+  if (r < 0) then
+    xa,ya,za,xb,yb,zb = xb,yb,zb,xa,ya,za
+  end
+  r = math.abs(r)
+  local l=(xa*xa + ya*ya + za*za)^.5
+  local nx,ny,nz = xb/l,yb/l,zb/l
+  local d = ( l<r and (1 - l/r) ) or 0
+  d = d*math.abs(f)
+  if (container == 1) then
+    if (l > r) then
+      if (f < 0) then
+        ox = ox+(xa*d)*f
+        oy = oy+(ya*d)*f
+        oz = oz+(za*d)*f
+      else
+        f = f<1 and f or 1
+        ox = (xb-nx*r)*f + ox
+        oy = (yb-ny*r)*f + oy
+        oz = (zb-nz*r)*f + oz
+      end
+      -- if ret==nil or ret==0 then
+      --   -- obj.rz = obj.rz*(1-f) + f*(math.atan2(y-oy,x-ox)*180/math.pi-90+obj.rz)
+      --   obj.ox,obj.oy,obj.oz = ox,oy,oz
+      -- end
+    end
+    return ox,oy,oz,d
+  else
+    if (l < r) then
+      if (f < 0 ) then
+        ox = (xa*d)*f + ox
+        oy = (ya*d)*f + oy
+        oz = (za*d)*f + oz
+      else
+        ox = (xb-nx*r)*f + ox
+        oy = (yb-ny*r)*f + oy
+        oz = (zb-nz*r)*f + oz
+      end
+      -- if ret == nil or ret == 0 then
+      --   -- obj.rz = obj.rz*(1-f)+ f*(math.atan2(y-oy,x-ox)*180/math.pi-90+obj.rz)
+      --   obj.ox,obj.oy,obj.oz = ox,oy,oz
+      -- end
+    end
+    return ox,oy,oz,d
+  end
+end
+]]
+
+
+local Spc=function(s)
+  local r,p,t = s[1],s[2],s[3]
+  local sin,cos=math.cos,math.sin
+  local x,y,z=sin(t)*cos(p)*r, sin(t)*sin(p)*r, cos(t)*r
+  return {y,-z,x}
+	--return {x,y,z}
+end
+
+local Rotv = function(v,r)
+  local v = v or {0,0,-1}
+  local r = r or {obj.rx,obj.ry,obj.rz}
+  local tR = math.pi/180
+  local cos,sin=math.cos,math.sin
+  local rx,ry,rz = r[1]*tR, r[2]*tR, r[3]*tR
+  local x,y,z = v[1],v[2],v[3]
+  local x0=x*cos(rz)-y*sin(rz)
+  local y0=x*sin(rz)+y*cos(rz)
+  local z0=z*cos(ry)-x0*sin(ry)
+  return {z*sin(ry)+x0*cos(ry),y0*cos(rx)-z0*sin(rx),y0*sin(rx)+z0*cos(rx)}
+end
+
+
+local Getpix=function(wn,hn,w,h)
+  local w,h=w,h
+  if not w then w,h=obj.getpixel() end
+  local dw=(w-1)/wn
+  local dh=(h-1)/hn
+  local t={}
+  for i=0,wn-1 do
+    t[i]={}
+    for j=0,hn-1 do
+      local col=obj.getpixel(dw*i,dh*j)
+      local Y,Cb,Cr,a=obj.getpixel(dw*i,dh*j,"yc")
+      t[i][j]={col,a/4096,Y/4096}
+    end
+  end
+  return t
+end
+
+local Falloff=function(v,startfade,vanish,smooth)
+  local startfade,vanish=startfade or 0,vanish or 1000
+  local smooth=smooth or 0
+  smooth=smooth+1
+  local val = v-startfade
+  val = val<0 and 0 or val
+  val = val>vanish and vanish or val
+  return (1-val/vanish)^smooth
+end
+
+
+-- Avr (p0,p1,p2)
+-- もどり値
+-- 頂点最大距離、ポリゴン法線、ポリゴン重心
+local Avr=function(...)
+  local v={...}
+  local avr={0,0,0}
+  local AB = V.Sub(v[1],v[2])
+  local BC = V.Sub(v[2],v[3])
+  local C = V.Cross(AB,BC)
+  local N = V.Normalize(C)
+  local L=0
+
+  for i=1,#v do
+   avr = V.Add(avr,{ v[i][1], v[i][2], v[i][3] })
+  end
+  local avr=V.Scale(avr,1/#v)
+ for i=1,#v-1 do
+    for j=1,#v-i do
+      local l = ((v[i][1]-v[i+j][1])^2 + (v[i][2]-v[i+j][2])^2 + (v[i][3]-v[i+j][3])^2)
+      L = (L<l and l) or L
+    end
+  end
+  return L, N, avr
+end
+
+-- Ref ({light},PolygonNormal,PolygonCentroids)
+-- もどり値
+-- カメラ目線ベクトルと反射光ベクトルの内積(1-0)
+
+local Ref=function(light,nv,avr,startfade,falloff)
+  --local light = light or {{0,0,-300}}
+  local light = light
+  local nv = nv or (Rotv())
+  local avr = avr or {obj.x+obj.ox, obj.y+obj.oy, obj.z+obj.oz}
+  local startfade,falloff=startfade or 300 ,falloff or 3000
+  local c=obj.getoption("camera_param")
+  local camV=V.Sub({c.x,c.y,c.z},{c.tx,c.ty,c.tz})
+  local camN=V.Normalize(camV)
+  local iv,L=1,1000
+  local ret,Rn,Ln=0,{},{0,0,0}
+  for k,layer in pairs(light) do
+    if not tostring(layer):find("table:") then
+      Ln=GL(layer)
+      iv=obj.getvalue("layer"..(layer)..".zoom")*.01
+    else
+      Ln = layer
+    end
+    local lv = V.Sub(avr,Ln)
+    local lenl = V.Length(lv)
+    local t=-(nv[1]*lv[1] + nv[2]*lv[2] + nv[3]*lv[3])/(nv[1]*nv[1] + nv[2]*nv[2] + nv[3]*nv[3])
+    local Rv={lv[1]+(t*nv[1]*2), lv[2]+(t*nv[2]*2), lv[3]+(t*nv[3]*2)}
+          Rn=V.Normalize(Rv)
+    local cv = V.Dot(camN,nv)
+    local rv = V.Dot(camN,Rn)
+    lenl=Falloff(lenl,startfade,falloff,1)
+    ret=ret<(rv*iv*lenl) and (rv*iv*lenl) or ret
+    ret=ret>1 and 1 or ret
+  end
+  return math.max(0,ret),Rn,iv
+end
+
+-- オブジェクトに直接 v = Refv(light) 反射強度を出せる
+if not Refv then Refv=Ref end
+
+-- Put (val,col,lightcol,intensity_boost ,shadow_darkness)
+-- 色の書き換え(加算合成)
+local Put=function(val,color,lightcolor,intensity_boost,shadow_darkness,multicolor)
+  local ib=intensity_boost or (1.2)
+  local sd=shadow_darkness or (0.0)
+  local val = ib/(1+(val*4)^2) --(math.exp(val*3))
+  local val2 =(val*(ib*.9)<(ib*.2) and val*(.9)*(1/.2)) or 1
+  local p={{0,0},{1,0},{1,1},{0,1} }
+  local r,g,b=RGB(color)
+  local r1,g1,b1=RGB(lightcolor)
+  local r0,b0,g0=(100)*.32, (100)*.64 , (100)*.18
+  r = r+r1*val-r0*(1-val2)
+  g = g+g1*val-g0*(1-val2)
+  b = b+b1*val-b0*(1-val2)
+  r = r-r*((1-val2)*sd)
+  g = g-g*((1-val2)*sd)
+  b = b-b*((1-val2)*sd)
+  r=(r>255 and 255) or (r<0 and 0) or r
+  g=(g>255 and 255) or (g<0 and 0) or g
+  b=(b>255 and 255) or (b<0 and 0) or b
+  obj.pixeloption("type","rgb")
+  if (multicolor==0) then
+    for i=1,4 do
+      obj.putpixel(p[i][1],p[i][2],r,g,b,255)
+    end
+  end
+  return RGB(r,g,b)
+end
+
+
+  local Dpoly=function(p0,p1,p2,p3,uv,alpha,sf,va,light,col,lcol,l,ib,sd,blend,multicolor)
+  local p3=p3 or p2
+  local sf,va = sf or 2200,va or 500
+  local uv,alpha=uv or {0,0, 0,2, 2,2, 2,0},alpha or 1
+  local L,nv,avr=Avr(p0,p1,p2)
+  local color = col
+  --avr = V.Scale(avr,1)
+  local val=0
+  if (multicolor==1) then
+    obj.load("figure","四角形",color,1)
+    for layer,v in pairs(REFLECTION.light) do
+      local val = Ref({layer},nv,avr,v[2],v[3])
+      color = Put((1-val)^l,col,v[1],ib,sd)
+      if val>0 then
+        obj.effect("グラデーション","color",color,"color2",color,"強さ",100*val,"type",0,"blend",blend or 1)
+      end
+   end
+ else
+   local val = Ref(light,nv,avr)
+  Put((1-val)^l,col,lcol,ib,sd,multicolor)
+  end
+  --ポリゴン毎の頂点距離が一定以上離れると消える
+  L=math.sqrt(L)-sf
+  L=(L>0 and L) or 0
+  L=(L<va and L) or va
+  L=L/va
+
+  local x0,y0,z0=unpack(p0)
+  local x1,y1,z1=unpack(p1)
+  local x2,y2,z2=unpack(p2)
+  local x3,y3,z3=unpack(p3)
+  local u0,v0,u1,v1,u2,v2,u3,v3=unpack(uv)
+  obj.drawpoly(x0,y0,z0, x1,y1,z1,x2,y2,z2,x3,y3,z3,
+  u0,v0,u1,v1,u2,v2,u3,v3,alpha*(1-L))
+end
+REFLECTION.Ref=Ref
+REFLECTION.Dpoly=Dpoly
+REFLECTION.GL=GL
+
+
+--本体
+
+local sin,cos,pi,un,tm=math.sin,math.cos,math.pi,unpack,obj.time
+local r,p,t = obj.track0 ,(0*pi/180) ,(0*pi/180)
+local ram0 = obj.track2*.01
+local ram  = obj.track3
+local ram1 = obj.track1*.01
+local rama = math.abs(ram1)
+
+if not tostring(div):find("table:") then
+    if (sphere==1) then
+      div={div,div*2}
+    else
+      div={div,div}
+    end
+ end
+local n0 = div[1]
+local n1 = div[2]
+
+if not tostring(w_s):find("table:") then w_s={w_s or 100,w_s or 100} end
+local wave_x = w_s[1]*.01
+local wave_y = w_s[2]*.01
+
+if not tostring(w_t):find("table:") then w_t={w_t or 100,w_t or 100} end
+local wave_tx = w_t[1]*.01
+local wave_ty = w_t[2]*.01
+
+local pn,pp = pi/n0 ,pi/n1
+obj.effect()
+local w,h = obj.getpixel()
+local PT = Getpix(n1,n0+1)
+obj.load("figure","四角形",0x00000,2)
+local T={}
+local F={}
+for i=0,n1-1 do
+  T[i]={}
+  F[i]={}
+  for j=0,n0  do
+    local frm=i*n1+j
+    --local r0 = sin(tm+(i+j)*wave_x)*60*ram+ (sin(-(j+i)*wave_x+tm*1)+1)*10*ram * (cos((j)*wave_y-tm*2)+1)*10*ram
+    local xr = rand(-100,100,seed or 1,frm-1000)*.01
+    local yr = rand(-100,100,seed or 2,frm+2000)*.01
+    local xs = sin(tm*wave_tx + (i/(n1-1))*3.1415*wave_x) * ram
+    local ys = sin(tm*wave_ty + (j/n0)*3.1415*wave_y) * ram
+    local r0 = xs * (rama*xr + 1-ram1) + ys * (rama*yr + 1-ram1)
+      r0 = r0 +( Shake(100,-100,100,i,frm) + Shake(300,-100,100,j,frm) ) * ram1
+      r0 = r0 + (PT[i][j][3]*PT[i][j][2])*obj.track2*10
+    local r=r+r0+((PT[i][j][3] )^2)
+    local p=p+pp*(-i)*2
+    local t=t+pn*(j)
+    local x,y,z
+    if (sphere==1)then
+      x,y,z= sin(t)*cos(p)*r, sin(t)*sin(p)*r, cos(t)*r
+      F[i][j]={y,-z,x}
+      x,y,z=unpack(Rotv({x,y,z}))
+      -- for k_,lfeild in pairs(layer) do
+      --  x,y,z = Field({x,y,z},feild,radius,strength,container or 0,1)
+      -- end
+      T[i][j]={y+obj.x,-z+obj.y,x+obj.z}
+      --obj.draw(y,-z,x)
+    else
+      x,y,z = (i*w/(n1-1))-w/2, (j*h/n0)-h/2, r0
+      x=x*obj.track0*.01
+      y=y*obj.track0*.01
+      z=z --*obj.track0*.01
+      F[i][j]={x,y,z}
+      x,y,z=unpack(Rotv({x,y,z}))
+      --x,y,z=x+obj.x,y+obj.y,z+obj.z
+      -- for k_,feild in pairs(layer) do
+      --  x,y,z = Field({x,y,z},feild,radius or 100,strength or 100,container or 0,1)
+      -- end
+      T[i][j]={x+obj.x,y+obj.y,z+obj.z}
+    end
+
+  end
+end
+
+if (cll==1) or (obj.time==0) or (obj.tine==obj.totaltime) then
+  REFLECTION.light={}
+  light={}
+end
+
+REFLECTION.PT=PT
+REFLECTION.T=T
+REFLECTION.F=F
+REFLECTION.COL={col,light,l_,ib,sd}
+REFLECTION.num={n1,n0,w,h,sphere}
+
+
+-----------------------------------------------
+@Reflection-Draw
+-----------------------------------------------
+--track0:透明度,0,1,0,1
+--track1:二値閾値,0,99,1
+--track2:多色ライト,0,1,0,1
+--track3:blend,0,3,0,1
+--check0:二値化,0
+local bl = {[0]=0,[1]=1,[2]=4,[3]=6} --通常、加算、スクリーン、比較(明)
+local blend = bl[obj.track3]
+local multicolor =obj.track2
+local o={obj.ox,obj.oy,obj.oz}
+local Add=Vector.Add
+local T=REFLECTION.T
+local Dpoly=REFLECTION.Dpoly
+local F=T
+for i=-9,9 do
+  local Str = obj.getoption("script_name",i,true)
+  if Str:find("Getpixel") then
+    F = REFLECTION.F
+    break
+  end
+end
+
+local PT=REFLECTION.PT
+local n1,n0,w,h,sphere = unpack(REFLECTION.num)
+--obj.copybuffer("obj","tmp")
+local Pcol = obj.getpixel(0,0)
+obj.load("figure","四角形",Pcol,2)
+local Lcol,light, ll,ib,sd = unpack(REFLECTION.COL)
+local u,v=w/(n1),h/(n0+2)
+obj.setoption("billboard",0)
+for i=0,n1-2+sphere do
+  for j=0,n0-1  do
+    local p0,p1,p2,p3
+    local col=PT[i][j][1]
+    local alp = (obj.track0==1) and PT[i][j][2] or 1
+    if (obj.check0) then
+      alp = alp>(obj.track1*.01) and 1 or 0
+    end
+    p0=T[i][j]
+    P0=F[i][j]
+    if( sphere==1 )then
+      p1=T[(i+1)%n1][j]
+      p2=T[(i+1)%n1][j+1]
+    else
+      p1=T[i+1][j]
+      p2=T[i+1][j+1]
+    end
+    p3=T[i][j+1]
+    P3=F[i][j+1]
+    p0=Add(p0,o)
+    p1=Add(p1,o)
+    p2=Add(p2,o)
+    p3=Add(p3,o)
+
+    local u0,v0,u1,v1,u2,v2,u3,v3 = u*i,v*j , u*(i+1),v*(j),u*(i+1),v*(j+1),u*(i),v*(j+1)
+    local D={
+    [0]={
+    {p0,p1,p2,p2,nil,alp,nil,nil, light ,col,Lcol,ll,ib,sd,blend,multicolor},
+    {p0,p2,p3,p3,nil,alp,nil,nil, light ,col,Lcol,ll,ib,sd,blend,multicolor}},
+    [1]={
+    {p0,p1,p3,p3,nil,alp,nil,nil, light ,col,Lcol,ll,ib,sd,blend,multicolor},
+    {p1,p2,p3,p3,nil,alp,nil,nil, light ,col,Lcol,ll,ib,sd,blend,multicolor}}
+    }
+    Dpoly(unpack(D[i%2][1]))
+    Dpoly(unpack(D[i%2][2]))
+  end
+end
+
+
+-----------------------------------------------
+@Lightオブジェクト化
+-----------------------------------------------
+--track0:startfade,0,9000,0
+--track1:falloff,1,9000,2000
+--check0:無効化,0
+--dialog:色を指定/chk,local uc=0;LightColor/col,local col=0xffffff;
+
+local startfade = obj.track0
+local falloff = obj.track1
+
+if not REFLECTION then
+  obj.setfont("koruri",30)
+  obj.load("Reflection-Getpixelを一度適用して下さい。")
+  obj.darw()
+end
+
+if (uc==1) then
+  REFLECTION.light[obj.layer]={col,startfade,falloff}
+else
+  local col=obj.getpixel(0,0)
+  REFLECTION.light[obj.layer]={col,startfade,falloff}
+end
+
+if obj.check0 then
+    REFLECTION.light[obj.layer]=nil
+end
+
+
+-----------------------------------------------
+@反射適用
+-----------------------------------------------
+
+--track0:反射強度,0,200,100
+--track1:AllFade,0,1,0,1
+--track2:startfade,0,9000,0
+--track3:falloff,1,9000,2000
+--check0:clear,0
+--dialog:lightLayer,local lt={};色を指定/chk,local uc=0;LightColor/col,local color=0xebb12f;
+local mastarfade = obj.track1
+local startfade = obj.track2
+local falloff =  obj.track3
+
+if not REFLECTION.Ref then
+  obj.setfont("koruri",30)
+  obj.load("Reflection-Getpixelを一度適用して下さい。")
+  obj.darw()
+end
+
+if (obj.check0) then
+    REFLECTION.light={}
+else
+  local lc={}
+  for k,v in pairs(lt) do
+    lc[v] = {color,startfade,falloff}
+  end
+
+  for layer,v in pairs(REFLECTION.light) do
+    if obj.getvalue("layer"..layer..".x") then
+        lc[layer] = v --or color --layer[k]=v
+      if mastarfade==1 then
+        lc[layer] = {v[1],startfade,falloff}
+      else
+        lc[layer] = REFLECTION.light[layer]
+      end
+    end
+  end
+
+  for layer,v in pairs(lc) do
+    local col=v[1]
+    if (uc==1) then col=color end
+    local s = REFLECTION.Ref({layer},nil,nil,lc[layer][2],lc[layer][3])
+    obj.effect("グラデーション","color",col, "color2",col,"強さ",obj.track0*s*s,"type",0,"blend",1)
+  end
+
+end

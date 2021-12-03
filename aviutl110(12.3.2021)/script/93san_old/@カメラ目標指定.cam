@@ -1,0 +1,177 @@
+-------------------------------------------
+@カメラ目標指定
+-------------------------------------------
+--track0:目標レイヤ,0,100,1,1
+--track1:位置%,0,200,100
+--track2:目標点%,0,200,100
+--track3:ﾃﾞｨﾚｲ/ms,-1000,1000,0,0.01
+--check0:レイヤを相対で指定,0
+--dialog:回転/chk,local rot=1;
+
+--[[
+目標レイヤーにあるオブジェクトをカメラ操作用のヌルオブジェクト(っぽいなにか)として利用します。
+デフォルト設定だと指定したオブジェクトと並行に移動する様になります。
+回転もリンクしますが、常に対象の正面に位置するという代物ではないのでご注意ください。
+(この場合はティムさんのオートターゲットスクリプトを使って下さい。)
+
+また複数使って役割を分けたり、加算したりすることも出来ます。
+
+注意 :: このスクリプトの "目標レイヤ" と、カメラ制御の "カメラ目標" を同じ値にしないで下さい
+        カメラ制御の "カメラ目標"は 0 を推奨。
+
+ ○役割○
+   
+   ・「目標レイヤ」
+     カメラ目標のレイヤーを指定します。
+    "レイヤを相対で指定" にチェックが入っている場合は「目標がカメラレイヤーから何レイヤー下にあるか」で指定します。
+     「@カメラ目標化」 を利用する場合は0にします。
+    
+   ・「位置%」
+      カメラの位置に対する影響度を変更します。 0で無効化します。
+
+   ・「目標点%」
+      カメラ目標に対する影響度を指定します。0で無効化します。
+
+   ・「ﾃﾞｨﾚｲ/ms」
+      目標に指定したレイヤーの移動から遅れて動作します。
+
+   ・「回転」
+      目標の回転に合わせてカメラも回転するかどうか指定します。
+      
+
+
+]]
+
+local cam = obj.getoption("camera_param")
+local GV  = obj.getvalue
+local Option = CamNullOption or 0
+local lt = math.max(0,obj.time+obj.track3/1000)
+
+local TL = math.floor(obj.track0)
+if (obj.check0) then 
+  TL = obj.layer+TL 
+end
+
+if (obj.track0==0) and (Option > 0) then
+  TL = Option
+end
+
+      TL="layer"..TL
+
+local POS=obj.track1/100 
+local POI=obj.track2/100
+
+local X,Y,Z=GV(TL..".x",lt),GV(TL..".y",lt),GV(TL..".z",lt)
+
+cam.x, cam.y, cam.z  = cam.x + X*POS,cam.y  +Y*POS,cam.z + Z*POS
+cam.tx,cam.ty,cam.tz = cam.tx+ X*POI,cam.ty +Y*POI,cam.tz+ Z*POI
+
+if rot==1 then
+
+cam.rz = cam.rz - GV(TL..".rz",lt)
+
+local x = cam.x-cam.tx
+local y = cam.y-cam.ty
+local z = cam.z-cam.tz
+
+local vx = cam.ux
+local vy = cam.uy
+local vz = cam.uz
+local r = -GV(TL..".ry",lt)*math.pi/180
+local s = math.sin(r)
+local c = math.cos(r)
+local m00 = vx*vx*(1-c)+c
+local m01 = vx*vy*(1-c)-vz*s
+local m02 = vz*vx*(1-c)+vy*s
+local m10 = vx*vy*(1-c)+vz*s
+local m11 = vy*vy*(1-c)+c
+local m12 = vy*vz*(1-c)-vx*s
+local m20 = vz*vx*(1-c)-vy*s
+local m21 = vy*vz*(1-c)+vx*s
+local m22 = vz*vz*(1-c)+c
+local x2 = m00*x+m01*y+m02*z
+local y2 = m10*x+m11*y+m12*z
+local z2 = m20*x+m21*y+m22*z
+
+local l = math.sqrt(x2*x2+y2*y2+z2*z2)
+if( l == 0 ) then return end
+vx = x2/l
+vy = y2/l
+vz = z2/l
+x = vy*cam.uz-vz*cam.uy
+y = vz*cam.ux-vx*cam.uz
+z = vx*cam.uy-vy*cam.ux
+l = math.sqrt(x*x+y*y+z*z)
+if( l == 0 ) then return end
+vx = x/l
+vy = y/l
+vz = z/l
+r = -GV(TL..".rx",lt)*math.pi/180
+s = math.sin(r)
+c = math.cos(r)
+m00 = vx*vx*(1-c)+c
+m01 = vx*vy*(1-c)-vz*s
+m02 = vz*vx*(1-c)+vy*s
+m10 = vx*vy*(1-c)+vz*s
+m11 = vy*vy*(1-c)+c
+m12 = vy*vz*(1-c)-vx*s
+m20 = vz*vx*(1-c)-vy*s
+m21 = vy*vz*(1-c)+vx*s
+m22 = vz*vz*(1-c)+c
+cam.x = cam.tx + m00*x2+m01*y2+m02*z2
+cam.y = cam.ty + m10*x2+m11*y2+m12*z2
+cam.z = cam.tz + m20*x2+m21*y2+m22*z2
+x = cam.ux
+y = cam.uy
+z = cam.uz
+ cam.ux = m00*x+m01*y+m02*z
+ cam.uy = m10*x+m11*y+m12*z
+ cam.uz = m20*x+m21*y+m22*z
+end
+
+obj.setoption("camera_param",cam)
+
+CamNullOption=nil
+
+
+-----------------------------------------------------
+@ランダム移動(カメラ)
+-----------------------------------------------------
+--track0:振幅,0,200,10
+--track1:角度,0,180,0.1,0.01
+--track2:間隔,0,500,50
+cam = obj.getoption("camera_param")
+
+if( obj.track2 == 0 ) then
+	cam.x = cam.x+rand(-obj.track0,obj.track0,0)
+	cam.y = cam.y+rand(-obj.track0,obj.track0,1)
+	cam.z = cam.z+rand(-obj.track0,obj.track0,2)
+	cam.rz = cam.rz+rand(-obj.track1,obj.track1,3)
+else
+	t = obj.time*100/obj.track2
+	p = math.floor(t)
+	t = t-p
+	x0 = obj.rand(-1000,1000,0,p+0)/1000*obj.track0
+	x1 = obj.rand(-1000,1000,0,p+1)/1000*obj.track0
+	x2 = obj.rand(-1000,1000,0,p+2)/1000*obj.track0
+	x3 = obj.rand(-1000,1000,0,p+3)/1000*obj.track0
+	y0 = obj.rand(-1000,1000,1,p+0)/1000*obj.track0
+	y1 = obj.rand(-1000,1000,1,p+1)/1000*obj.track0
+	y2 = obj.rand(-1000,1000,1,p+2)/1000*obj.track0
+	y3 = obj.rand(-1000,1000,1,p+3)/1000*obj.track0
+	z0 = obj.rand(-1000,1000,2,p+0)/1000*obj.track0
+	z1 = obj.rand(-1000,1000,2,p+1)/1000*obj.track0
+	z2 = obj.rand(-1000,1000,2,p+2)/1000*obj.track0
+	z3 = obj.rand(-1000,1000,2,p+3)/1000*obj.track0
+	r0 = obj.rand(-1000,1000,3,p+0)/1000*obj.track1
+	r1 = obj.rand(-1000,1000,3,p+1)/1000*obj.track1
+	r2 = obj.rand(-1000,1000,3,p+2)/1000*obj.track1
+	r3 = obj.rand(-1000,1000,3,p+3)/1000*obj.track1
+	x,y,z = obj.interpolation(t,x0,y0,z0,x1,y1,z1,x2,y2,z2,x3,y3,z3)
+	cam.x = cam.x + x
+	cam.y = cam.y + y
+	cam.z = cam.z + z
+	r = obj.interpolation(t,r0,r1,r2,r3)
+	cam.rz = cam.rz + r
+end
+obj.setoption("camera_param",cam)

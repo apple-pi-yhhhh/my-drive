@@ -1,0 +1,508 @@
+@座標plus
+--track0:X,-5000,5000,0
+--track1:Y,-5000,5000,0
+--track2:Z,-5000,5000,0
+--track3:track3,-5000,5000,100
+--check0:座標のロック,0
+--dialog:スナップ,local snap=0;X加算,local X=0;Y加算,local Y=0;Z加算,local Z=0;親レイヤー,local Link=0;倍率% [XYZ],local mp={100,100,100};
+
+--[[
+基本効果の座標だと相対座標を上書きしてしまうので単純に 相対座標 = 相対座標+トラックバー にしたかったので作りました。余計なものもくっつきました。
+
+・座標のロック ドラッグでの移動のみ禁止します。
+レイヤーのロックはしたくないけど移動するのは困る場合、シーンや背景などに。カスタムフレアとか。
+カウンターを当ててるだけなのでチェックを外したら行方不明の場合も。
+
+・スナップ 数値を入れると画面ドラッグでの移動が数値毎にカクカクとスナップ移動するようになります。
+テーブル(= {100,100,100}こういうの) で書くとx,y,z 各個指定できます。
+座標のロックとの併用は…見なかったことに。
+
+・親レイヤー 数値を入れると対象のレイヤーの座標にリンクします。
+・倍率% 親レイヤーを指定した場合のみ使います。スナップ同様にテーブル、数値どちらも使えます。
+]]
+local type = function(v)
+local v = v
+local s = tostring(v)
+if(s == v)then return "string" end
+if(s == "nil")then return "nil" end
+if(string.find(s, "table:"))then return "table" end
+return "number"
+end
+
+X=X or 0
+Y=Y or 0
+Z=Z or 0
+mp=mp or 100
+
+if (obj.check0) then 
+obj.ox=-obj.x obj.oy=-obj.y obj.oz=-obj.z
+end
+
+local Mf=math.floor
+local Gv=obj.getvalue
+local LL = math.abs(Link)
+
+
+if Link~=0 then
+ if type(mp)=="table" then
+   X = X+Gv("layer" ..LL.. ".x")*(mp[1]*0.01)
+   Y = Y+Gv("layer" ..LL.. ".y")*(mp[2]*0.01)
+   Z = Z+Gv("layer" ..LL.. ".z")*(mp[3]*0.01)
+  elseif type(mp)=="number" then
+   X = X+Gv("layer" ..LL.. ".x")*(mp*0.01)
+   Y = Y+Gv("layer" ..LL.. ".y")*(mp*0.01)
+   Z = Z+Gv("layer" ..LL.. ".z")*(mp*0.01)
+  end
+end
+
+obj.ox=obj.ox+obj.track0+X
+obj.oy=obj.oy+obj.track1+Y
+obj.oz=obj.oz+obj.track2+Z
+
+if snap~=0 then
+ if type(snap)=="number" then
+ snap=math.abs(snap)
+  obj.ox=-obj.x+(Mf(obj.x/snap)*snap)+obj.ox
+  obj.oy=-obj.y+(Mf(obj.y/snap)*snap)+obj.oy
+  obj.oz=-obj.z+(Mf(obj.z/snap)*snap)+obj.oz
+ elseif type(snap)=="table" then
+  obj.ox=-obj.x+(Mf(obj.x/snap[1])*snap[1])+obj.ox
+  obj.oy=-obj.y+(Mf(obj.y/snap[2])*snap[2])+obj.oy
+  obj.oz=-obj.z+(Mf(obj.z/snap[3])*snap[3])+obj.oz
+ end
+end
+
+
+
+
+@回転plus
+--track0:X軸,-3600,3600,0
+--track1:Y軸,-3600,3600,0
+--track2:Z軸,-3600,3600,0
+--track3:track3,-1000,1000,100
+--dialog:空変数(V),local V=obj.track3;変数表示/chk,local txt=0;角度スナップ,local snap=0;X軸加算,local X=0;Y軸加算,local Y=0;Z軸加算,local Z=0;親レイヤー,local Link=0;倍率% [XYZ],local mp={100,100,100};
+
+--[[座標プラスと大体一緒]]
+local type = function(v)
+local v = v
+local s = tostring(v)
+if(s == v)then return "string" end
+if(s == "nil")then return "nil" end
+if(string.find(s, "table:"))then return "table" end
+return "number"
+end
+
+X=X or 0
+Y=Y or 0
+Z=Z or 0
+mp=mp or 100
+
+obj.setfont("メイリオ", 40)
+if txt==1 then
+obj.load("text","V="..V)
+end
+
+local Gv=obj.getvalue
+
+if Link~=0 then
+ LL = math.abs(Link)
+ if type(mp)=="table" then
+  X = X+Gv("layer" ..LL.. ".rx")*(mp[1]*0.01)
+  Y = Y+Gv("layer" ..LL.. ".ry")*(mp[2]*0.01)
+  Z = Z+Gv("layer" ..LL.. ".rz")*(mp[3]*0.01)
+ elseif type(mp)=="number" then
+  X = X+Gv("layer" ..LL.. ".rx")*(mp*0.01)
+  Y = Y+Gv("layer" ..LL.. ".ry")*(mp*0.01)
+  Z = Z+Gv("layer" ..LL.. ".rz")*(mp*0.01)
+ end
+end
+
+obj.rx=obj.rx+obj.track0+X
+obj.ry=obj.ry+obj.track1+Y
+obj.rz=obj.rz+obj.track2+Z
+
+if snap~=0 then
+snap=math.abs(snap)
+obj.rx=(math.floor(obj.rx/snap)*snap)
+obj.ry=(math.floor(obj.ry/snap)*snap)
+obj.rz=(math.floor(obj.rz/snap)*snap)
+end
+
+
+
+
+
+
+
+@パラメータ格納
+--track0:座標%,-1000,1000,100
+--track1:回転%,-1000,1000,100
+--track2:拡大%,-1000,1000,100
+--dialog:名前を付ける,local name="";相対座標も含む/chk,local rel=1;基準座標無視/chk,local onlyrel=0;
+
+--[[
+
+パラメータに名前を付けて配列にするだけ。
+
+「名前を付ける」の部分に何らかのテキストを入力します
+「名前を付ける」に M と入れた場合
+GVA["Mx"] で レイヤーMのx座標が呼び出せる…だけ。
+
+空欄の場合はレイヤ番号が名前になります,グループ制御で纏めて複数のオブジェクトの座標を個別に取得する用?
+
+obj.getvalueでレイヤーを指定すると後でレイヤを移動した場合リンクが切れたり、
+またスクリプトでの座標移動が取れなかったりと面倒なので作ったものの
+むしろ余計面倒なことになってしまいました。
+
+colは正直意味がない
+
+
+個別オブジェクトの座標、回転も取得する様に。
+ 
+]]
+
+if name=="" then name=obj.layer end
+
+if (GVA==nil) then
+   GVA={} 
+end
+
+local col=obj.getpixel(obj.w/2,obj.h/2,"col")
+local Gv=obj.getvalue
+local pos=obj.track0/100
+local rot=obj.track1/100
+local zoom=obj.track2/100
+local t = {"x","y","z","zoom","alpha","aspect","rx","ry","rz","cx","cy","cz","col"}
+
+local x,y,z =obj.x,obj.y,obj.z
+if onlyrel==1 then x,y,z=0,0,0 end
+
+local ox,oy,oz=obj.ox,obj.oy,obj.oz
+if rel==0 then ox,oy,oz=0,0,0 end
+
+local val={(x+ox)*pos,(y+oy)*pos,(z+oz)*pos, 
+           Gv("zoom")*zoom,Gv("alpha")*obj.alpha,Gv("aspect"),
+           Gv("rx")*rot,Gv("ry")*rot,Gv("rz")*rot,
+           obj.cx,obj.cy,obj.cz,
+           col
+          }
+
+ for i =1,13 do
+  GVA[name..t[i]]=val[i] 
+ end
+
+----個別オブジェクトの座標も格納
+if (1 < obj.num) then
+
+if obj.index==0 then
+ GVAmulti={}
+ GVAmultirot={}
+end
+
+GVAmulti[obj.index+1]={val[1],val[2],val[3]} --座標
+GVAmultirot[obj.index+1]={obj.rx,obj.ry,obj.rz} --回転
+
+local t3={}
+local t2={}
+local trot={}
+
+for i =1,(#GVAmulti) do
+for j=1,3 do
+table.insert(t3,GVAmulti[i][j])
+table.insert(trot,GVAmultirot[i][j])
+end
+end
+
+GVA[name.."3D"]=t3
+GVA[name.."rot"]=trot
+
+for i =1,(#GVAmulti) do 
+t2[i*2-1]=GVAmulti[i][1]
+t2[i*2]=GVAmulti[i][2]
+end
+GVA[name.."2D"]=t2
+else
+GVA[name.."3D"]=nil
+GVA[name.."2D"]=nil
+GVA[name.."rot"]=nil
+end
+
+
+
+
+
+@パラメータ呼び出し
+--track0:座標%,-1000,1000,100
+--track1:回転%,-1000,1000,100
+--track2:中心点%,-1000,1000,100
+--track3:個別%,0,100,100
+--check0:個別オブジェクト座標,0
+--dialog:呼び出し対象,local name="";拡大率/chk,local callzoom=0;縦横比/chk,local callaspect=0;透明度/chk,local callalpha=0;色/chk,local callcol=0;輝度を保持0-1,local kido=0;
+
+--[[
+パラメータ格納で取得した情報を適用します
+
+呼び出し対象にパラメータ取得で付けた名前を入力します。
+
+個別オブジェクトの配置や回転をリンクさせることも出来ます
+
+]]
+local affect=obj.track3/100
+local V=GVA
+kido = kido or 0
+
+if V==nil then
+obj.setfont("メイリオ", 20)
+obj.load("text","パラメータ格納でパラメーターを取得して下さい")
+obj.draw()
+end
+
+if obj.check0 then
+obj.ox=V[name.."3D"][obj.index*3+1]*(affect*obj.track0/100)+(obj.ox-obj.ox*affect)
+obj.oy=V[name.."3D"][obj.index*3+2]*(affect*obj.track0/100)+(obj.oy-obj.oy*affect)
+obj.oz=V[name.."3D"][obj.index*3+3]*(affect*obj.track0/100)+(obj.oz-obj.oz*affect)
+obj.rx=V[name.."rot"][obj.index*3+1]*obj.track1/100
+obj.ry=V[name.."rot"][obj.index*3+2]*obj.track1/100
+obj.rz=V[name.."rot"][obj.index*3+3]*obj.track1/100
+else
+ obj.ox=obj.ox + V[name.."x"]*obj.track0/100
+ obj.oy=obj.oy + V[name.."y"]*obj.track0/100
+ obj.oz=obj.oz + V[name.."z"]*obj.track0/100
+
+ obj.rx=obj.rx + V[name.."rx"]*obj.track1/100
+ obj.ry=obj.ry + V[name.."ry"]*obj.track1/100
+ obj.rz=obj.rz + V[name.."rz"]*obj.track1/100
+end
+ obj.cx=obj.cx + V[name.."cx"]*obj.track2/100
+ obj.cy=obj.cy + V[name.."cy"]*obj.track2/100
+ obj.cz=obj.cz + V[name.."cz"]*obj.track2/100
+
+if callzoom==1 then
+ obj.zoom=obj.zoom*V[name.."zoom"]/100
+end
+
+if callaspect==1 then
+ obj.aspect=V[name.."aspect"]
+end
+
+if callalpha==1 then
+ obj.alpha=obj.alpha*V[name.."alpha"]
+end
+
+if callcol==1 then
+obj.effect("単色化","強さ",100,"輝度を保持する",kido,"color",V[name.."col"])
+end
+
+
+@個別座標再配置
+--track0:Affect,0,100,100
+--track1:X倍率,-1000,1000,100
+--track2:Y倍率,-1000,1000,100
+--track3:Z倍率,-1000,1000,100
+--dialog:座標,pos={};3Dアンカー/chk,local D=0;全体倍率,local zoom=100;Affect加算,local affectext=0;indexずらし,local addindex=0;index指定,local conindex={};格納座標を使用/chk,local gva=0;呼び出し対象,local name="";
+
+
+--[[
+
+あっくんさんがtwitterでつぶやいていたネタです
+
+Affectを0にすると元の配置になります。これを利用して複数の配置を行き来できます。倍率はおまけ。
+
+仕様上2Dモードでは最大16文字まで、3Dは6文字前後までしかまともに動きません。
+
+TAの前にこれをかけるとTAを使いつつ好きな配置に出来るようです。
+
+「格納座標使用/呼び出す名前」を使って「パラメータ取得」で取得した座標を直接適用できます（アンカーは使えなくなります)
+
+「indexずらし」は配列をずらします(ループ仕様)。
+
+「index指定」は  {1,4,6,12} このように特定のindexを指定するとその位置だけを呼び出します
+
+]]
+
+
+--未使用memo
+
+--[[
+
+
+local type = function(v)
+local v = v
+local s = tostring(v)
+if(s == v)then return "string" end
+if(string.find(s, "table:"))then return "table" end
+return "number"
+end
+
+
+--{Layer}の三次元座標
+if type(Layer)=="table" then
+local posL={}
+  local str={".x",".y",".z"}
+  for i=0,#Layer*3-1 do
+   local j=i%3+1
+   local layer="layer"..Layer[math.ceil((i+1)/3)]
+   table.insert(posL,obj.getvalue(layer..str[j]))
+  end
+end
+
+ --円形配置
+local posR={}
+local num=obj.num
+local rad=obj.getvalue("rz")--半径
+for i=0,num-1 do
+local r = 360*(i+1)/num+obj.getvalue("rz")
+posR[i*3+1]=-math.cos(math.pi/180*r)*rad +obj.x --x
+posR[i*3+2]=math.sin(math.pi/180*r)*rad +obj.y --y
+posR[i*3+3]=0 --z
+end
+
+--多面体
+local posG={}
+local G=(1+math.sqrt(5))/2
+local Gs = {0,-1,-G^2,0,1,-G^2,0,-1,G^2,0,1,G^2,-1,-G^2,0,1,-G^2,0,-1,G^2,0,1,G^2,0,-G^2,0,-1,-G^2,0,1,G^2,0,-1,G^2,0,1,-G,-G,-G,-G,-G,G,-G,G,-G,-G,G,G,G,-G,-G,G,-G,G,G,G,-G,G,G,G}
+for i =0, #Gs/3-1 do
+ j=obj.getvalue("rz")
+posG[i*3+1]=obj.x+(Gs[i*3+1])*j
+posG[i*3+2]=obj.y+(Gs[i*3+2])*j
+posG[i*3+3]=obj.z+(Gs[i*3+3])*j
+end
+
+--三角
+local posTRI={}
+local w=obj.getpixel();local S=audio(1,1,2000) or 1
+w=w*S
+local h=w*0.866 --ハニカムマジックナンバー
+local d=0 --z軸ずれ
+local num=6
+local Y_offset=h*(num/2) --基準位置オフセット
+
+for i=0,num-1 do
+ y=i*h - Y_offset
+ z=i*d
+
+  for j=0,i do
+   --z=j*d
+   x=j*w-(i*w/2)
+   ros={x+obj.x,y+obj.y,z+obj.z}
+
+    for k=1,3 do 
+     table.insert(posTRI,ros[k]) 
+    end
+
+  obj.draw(x,y,z,1+S)
+ end
+end
+]]
+-------------------------------------------------------
+
+local function IndexRA(postable,indextable,dimension)
+local dimension=dimension or 0
+--パラメータ格納の個別座標から特定の位置だけを取り出す
+local L=indextable --取り出すindexをテーブルで指定
+
+for i=1,#L do
+L[i]=L[i]-1 -- index指定が0から始まってしまうので...
+end
+
+local V=postable
+if tostring(postable)==V then 
+      V=GVA[V.."3D"] end
+local T={}
+
+if (dimension==2) then
+  for i=0,#L-1 do
+  T[i*2+1]=V[L[i+1]*2+1]
+  T[i*2+2]=V[L[i+1]*2+2]
+  end
+else
+  for i=0,#L-1 do
+  T[i*3+1]=V[L[i+1]*3+1]
+  T[i*3+2]=V[L[i+1]*3+2]
+  T[i*3+3]=V[L[i+1]*3+3]
+ end
+end
+return T
+end
+
+
+if name=="" then name=""..obj.layer end
+if conindex==nil then conindex={} end
+
+affectext=affectext or 0
+addindex=math.floor(addindex) or 0
+
+local affect=obj.track0/100 + affectext/100
+      zoom=zoom/100
+local X,Y,Z = obj.track1/100,obj.track2/100, obj.track3/100
+
+if D==1 then  --3Dアンカー
+obj.setanchor("pos",obj.num,"xyz")
+
+if pos==nil then pos={} end
+
+--++
+if gva==1 then
+ if #conindex>0 then
+  pos=IndexRA(name,conindex)
+  else
+  pos=GVA[name.."3D"]
+  end
+else
+ if #conindex>0 then
+ pos=IndexRA(pos,conindex)
+ else 
+ pos=pos
+ end
+end
+--++
+
+--[[
+if gva==1 then pos=GVA[name.."3D"] end
+if #conindex>0 then
+local L=conindex
+local V=pos 
+local T={}
+   for i=0,#L-1 do
+    T[i*3+1]=V[L[i+1]*3+1]
+    T[i*3+2]=V[L[i+1]*3+2]
+    T[i*3+3]=V[L[i+1]*3+3]
+   end
+  pos=T
+ else
+ pos=pos
+ end
+]]
+
+x=pos[(obj.index+addindex)%obj.num*3+1]*(zoom*X*affect)+(obj.ox-obj.ox*affect)
+y=pos[(obj.index+addindex)%obj.num*3+2]*(zoom*Y*affect)+(obj.oy-obj.oy*affect)
+z=pos[(obj.index+addindex)%obj.num*3+3]*(zoom*Z*affect)+(obj.oz-obj.oz*affect)
+
+else --2Dアンカー
+
+obj.setanchor("pos",obj.num,"line")
+if pos==nil then pos={} end
+
+--++
+if gva==1 then
+ if #conindex>0 then
+  pos=IndexRA(name,conindex,2)
+  else
+  pos=GVA[name.."2D"]
+  end
+else
+ if #conindex>0 then
+ pos=IndexRA(pos,conindex,2)
+ else 
+ pos=pos
+ end
+end
+--++
+
+x=pos[(obj.index+addindex)%obj.num*2+1]*(zoom*X*affect)+(obj.ox-obj.ox*affect)
+y=pos[(obj.index+addindex)%obj.num*2+2]*(zoom*Y*affect)+(obj.oy-obj.oy*affect)
+end
+
+obj.ox=x
+obj.oy=y
+obj.oz=z

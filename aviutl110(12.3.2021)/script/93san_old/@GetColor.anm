@@ -1,0 +1,1226 @@
+--[[
+
+背景の明るさや透明度に基づいて座標を獲得し、格子線スクリプトに渡すためのツールです。が
+無駄にあれこれ追加したらなんたら○ールアクションやF○rmの劣化版に。
+個別オブジェクトにも対応します。
+
+ GetColor本体 ダイアログ設定
+
+◆info[0/2] 
+	各種表示のon/off
+	もともとおまけだったのがメインに。
+ 	0= 非表示(座標と色の獲得のみ) | 1=獲得ピクセルを表示 | 2=獲得ピクセル表示 + その他情報
+
+◆HSVARGB[0/7] 
+	X,Y,Z方向影響,サイズ影響に与えるピクセル情報を指定します。
+	1=色相(H) | 2=彩度(S) | 3=明度(V) | 4=透明度(alpha) | 5=赤(R) | 6=緑(G) | 7=青(B)
+	※RGBはあくまでRGBの値の大きさなのでRを指定したからと言っても赤色を指定するわけではありません。
+	※マイナスだと隠し機能的に実際に各種値を数値で表示します(重い)
+	オプションを追加した場合は個別でオプションに従います。
+	
+
+◆X,Y,Z方向影響,サイズ影響
+	HSVARGBで指定した情報に基づいた座標とサイズの影響度を指定します。
+	オプションを追加した場合はサイズを除き加算されます。
+
+◆双方向
+	ピクセル情報の影響度を正負方向に分散します。
+	ピクセル情報によりけりなので必ずしも正負方向になるとは限りません。
+	オプションを追加した場合は個別でオプションに従います。
+
+◆AudioReact
+	AudioReactオプションがついている場合、X,Y,Z方向影響,サイズ影響が音に反応します。
+	HSVARGBが0の場合は動作しません。(ピクセル情報と音の高さを個別でリンクしているため)
+	他のオプションがある場合は本体の影響度+オプション側の影響度になるのでチェックを外すといいかもしれません。
+
+◆拡大率挙動
+	拡大率を変更した場合元の大きさに従うか、ドットサイズのみの変化か変更します。0か1で指定します。
+	見た目の精度をあげたい場合は1にするといいです。GetColor(ScaleOption)と併用するとより良いです。
+
+◆図形サイズ
+	そのまんまです。サイズ影響はここで指定したサイズに倍率をかける形で動作します。
+
+◆色(空欄で画像色)
+	そのまんまです。
+
+◆座標を出力
+	チェックした場合表示されているドットの位置と色情報をグローバル変数で外部へ出力します。
+	GC.pos3  レイヤー番号で区別しており、最後の数字がこのスクリプトを設置したレイヤー番号です。
+	変数名はinfoを2にすると確認可能です。
+	
+	また、AudioReactを使用している場合はGC.audioという変数で音声情報も出力します。
+	GC.audio[1] だと一番低い音が取り出せます。 (使用例)  obj.oy = GC.audio[obj.index+1] + obj.oy
+	
+
+
+
+
+  GetColor追加オプション (オプションは本体より上に設置して下さい)
+
+□GetColor(ScaleOption)
+
+	ドットのサイズと全体のスケールを変更します。
+	■ダイアログ設定■
+	HSVARGB		>> 指定したpixel情報 (H,S,V, Alpha, R,G,B) に従って表示サイズを変化させます。	
+			   上段のHSVARGBが図形のサイズ、下段のHSVARGBが全体の位置のスケールです。
+	双方向		>> HSVARGB の変化を0～1の範囲から-1～1の範囲へ変更します。
+			   上段のHSVARGBが図形のサイズ、下段のHSVARGBが全体の位置のスケールです。
+	表示図形	>> そのままの意味です。
+	表示図形ライン  >> そのままの意味です。
+	SizeRandom	>> 図形のサイズをランダムにします。0～100 の範囲で指定します。
+	AlphaRandom	>> 図形の透明度ををランダムにします。0～100 の範囲で指定します。
+	透明度変化	>> チェックすると、表示図形の透明度が元の画像透明度の変化を無視します。（完全に透明だと非表示です）
+	個別拡大調整    >> 個別オブジェクトの場合に位置関係を維持してScaleを拡大します。(元のオブジェクトは変化しません)。	
+	
+
+
+□GetColor(TwistOption)
+
+	ひねりを加える追加オプションです。
+	HSVARGBが0以外だと元画像のpixel情報の影響を受けます。(H,S,V, Alpha, R,G,B,HEX)
+
+ 	◆チェックボックスはトラックバーStrengthの働きを変更します。
+ 	・チェック無し = 各種トラックバーに倍率をかけます。(100で等倍)
+	・チェック有り = ランダムに散らします。(トラックバー倍率は等倍で固定です)
+        
+	■ダイアログ設定■
+	回転モード  >> ひねりパターンを変更します。
+		       0=交互ひねり、1=定方向ひねり、2=折りたたみ、3=渦状ロール、4=正負ランダム回転
+	HSVARGB	    >> 指定したpixel情報 (H,S,V, Alpha, R,G,B) に従ってひねりの影響度を変化させます。
+	双方向      >> HSVARGB の変化を0～1の範囲から-1～1の範囲へ変更します。
+	X,Y,Z(add)  >> トラックバーをスクリプトで制御するための入力窓です。
+	FlowSpeed   >> 揺らぎの速さを変更します。
+	X,Y,ZScale  >> 揺らぎスケールを変更します。数値を上げると波が細かくなります。(ひねりの倍率も増えます)
+	seed        >> Scatter使用時のランダムシードです。
+	
+	
+□GetColor(PosOption)
+	
+	本体のX,Y,Z方向影響の外部コントローラーです。
+	Strengthでトラックバーの値全体に倍率をかけます。
+	◆相対位置モードにチェックすると回転の計算後に実行されます。
+
+	■ダイアログ設定■
+	HSVARGB	    >> 指定したpixel情報 (H,S,V, Alpha, R,G,B) に従って位置の影響度を変化させます。
+	双方向	    >> HSVARGB の変化を0～1の範囲から-1～1の範囲へ変更します。
+	
+	
+
+□GetColor(Field)
+
+	指定したレイヤーから一定距離のピクセルを押し出すような動作をします。
+
+
+□GetColor(ColorShift) 
+
+	獲得したHSV情報をずらします。
+	移動量指定でループするので他のOptionと併用して使うと映像をスクロールさせたりできます
+	例 :: PosOptionを設置、トラックバーYを100、HSVARGB を3に設定(=Vを指定)、V-Shiftを移動量指定1 等。
+	
+	■ダイアログ設定■
+	明度閾値タイプ >> 本体の明度閾値の値を明度の0として扱うようにします。
+	その他入力欄   >> トラックバーの拡張、スクリプトで制御するための窓です。（加算合成）
+	
+
+□GetColor(AudioReact) 
+
+	※本体より上に設置してください。
+
+	基本他のオプションに対して影響を与える機能です。
+	オーディオの音量や音の高さに反応して動作します。
+	重要:: ピクセル情報に基づいて効果が掛かるので「本体、又は他のオプションのHSVARGBの項目が0だと機能しません。」
+	
+	■トラックバー■ 
+	Twist   >> TwistOptionに対する影響度です。TwistOptionのStrengthを音量でコントロールするような動作です。 
+	Pos     >> PosOptionに対する影響度です。 PosOptionのStrengthを音量でコントロールするような動作です。 
+	Point   >> ScaleOptionに対する影響度です。ScaleOptionのPointを音量でコントロールするような動作です。
+	Amp     >> 音量の値を大きくします。
+	◆info    >> スペクトラムを表示します。
+
+	■ダイアログ設定■
+	平均化範囲   >> 数値を上げると滑らかになります。3～6 程度推奨。あまり上げてもメモリを食うだけで意味はありません。
+	分割数	     >> オーディオスペクトラム分割数を指定します。
+
+	
+
+
+
+
+更新履歴
+         v0.72 >> ScaleOption使用時に位置がずれていくのを修正しました。
+
+	 v0.74 >> ScaleOption使用時に位置がずれていくのを修正しました。その2
+		  ScaleOptionの図形サイズの動作を本体から独立させました。
+		　
+	 v0.80 >> FeildOption 暫定追加
+		　出力する変数名を変更しています。
+
+         v0.90b>> ColorShifOption,AudioReactを追加、代わりにAudioReactを常時つけないとエラーが出るようになった。ee..
+		  ScaleOptionのPointの動作を変更しています。rot関数をrikkyさんのコードに。	
+
+	 v0.99 >> AudioReact周りの不具合を解消? ほかはまだまだ
+	
+	 v1.00 >> Option有無判定の方法を変更、AudioReact周りの挙動を全体的に刷新しました。
+		  個別オブジェクト時のヘルプ表示がおかしいのはご勘弁。
+		  	
+
+	 v1.01 >> ScaleOptionで表示図形を変更できるように。ColorShiftの段違い表示は本体へ。
+	 
+	 v1.02 >> AudioReactの表示をちょっと増加、AudioReact使用時にPointが反応しすぎる問題はどうしましょう。
+		  obj.alphaを取得するようにしたのでTAと合わせてフェードするように。
+		  TwistOpionのStrengthにダイアログボックスを追加、(1-obj.alpha)*100などでTAと連動したり。
+		  個別オブジェク時、GVAテーブルに正しく座標が入っていないのを修正（完全に自分用）
+		  
+	 v1.03b>> Pointサイズの計算方法を若干変更、ScaleOption設置時は本体設定を無視するように。Audioの効きすぎ緩和？また双方向の効きがよくなったはず。
+		  			(313行目: as=10 を as=3 に 635行目: (本体+Scaleオプション)の形式へ)
+		  ScaleOptionの計算箇所をチェックボックスで変更する機能を追加。スケールを変えた後にTwist出来るようにしました。　(497行目から数行)
+		  Optionのダイアログ入力にテーブルを受け付けるための関数追加。(obj.indexで振り分けます & nil対策)
+		  
+	 v1.05 >> ScaleOptionにサイズと透明度のランダム化を追加(0～100の範囲)。seedがTwistOptionにあるので少し厄介。
+		  TwistOption、ランダムのテーブルをスライドするオプション項目追加(SizeRandom,AlphaRandom用)
+		  重要:: AudioReactの計算が完!全!に間違っていたのを修正しました。申し訳ありません。
+		  HSVARGBにHEXを追加、8種類に。一応16777216段階らしい。
+	          ColorShiftOption、HEX追加伴いcolShiftを追加、また輝度を透明度に変換と0xffffffを除外する謎の項目も追加。
+		  TwistOption、回転モード2のTwistZを折り畳む形に変更。
+		  ScaleOption、個別オブジェクトの場合に位置関係を維持するオプションを追加。
+		  軸回転はスクリプトでの回転にも付き合うようにした。(obj.getvalue("rx")からobj.rxに変更)
+		  
+		  座標出力時、個別オブジェクトにリンクするためのスクリプトを追加。(別途単体スクリプトです)
+	
+	 v1.06 >> HSVRGBの明度(V)を輝度へ変更。滑らかに。   
+		  
+		   
+		  	
+]]
+
+
+
+-------------------------------------------------------------------------------------------
+
+@GetColor
+
+-------------------------------------------------------------------------------------------
+
+--track0:横,1,500,10,1
+--track1:縦,1,500,10,1
+--track2:輝度閾値,0,100,1
+--track3:透明閾値,1,100,10,0.01
+--check0:元画像非表示,1
+--dialog:info[0/2],local info=1;HSVARGB[0/8],local infoparam=0;X方向影響,local ax=0;Y方向影響,local ay=0;Z方向影響,local az=0;サイズ影響,local as=0;双方向/chk,local Both_dir=0;AudioReact/chk,local AudioR=0;拡大率挙動[0/1],local ZM=0;図形サイズ,local txtsize=10;色(空欄で画像色)/col,local icolor=nil;段違い表示/chk,local mut=0;座標を出力/chk,local put_o=0;座標間引き,local subpoint=0;
+
+obj.effect()
+
+local mnum = 1
+if obj.num>1 then mnum=math.min(8,obj.num)/2 end --個別オブジェクト切り替え時の事故防止(逆事故あり)
+local gv = obj.getvalue
+local wn = obj.track0/mnum      -- Width_num
+local hn = obj.track1/mnum      -- Height_num
+local VT = obj.track2           -- Value_Threshold 
+local AT = obj.track3/100       -- Alpha_Threshold
+local w,h = obj.getpixel()
+ZM = ZM or 0
+local zoom = 1
+if(ZM==0)then zoom=gv("zoom")*0.01*obj.zoom end
+local fw,fh=w/wn,h/hn
+local toRad = 0.017453292519943 --math.pi/180
+local toDeg = 57.295779513082   --180/math.pi
+
+local c,PIX,p,P={},{},{},{} -- c=color PIX ={H,S,V,A,R,G,B} p=x,y,z  P={z,y,z}
+
+
+if obj.index==0 then MP={} end
+MP[obj.index+1]={}
+subpoint = subpoint or 3 --事故防止
+subpoint = math.max(1,subpoint)
+
+
+--呼ぶ図形
+local fig,figline = "円" ,1000
+
+txtsize = txtsize or 20
+txtsize = math.min(100,txtsize)
+
+infoparam = infoparam or 1
+infoparam = math.max(-8,math.min(8,infoparam ))
+
+--オプション用初期値
+local trx,try,trz = 0,0,0
+local Scatter = 0
+local twistmode = 0
+local twistscale = {1,1,1}
+local orientcam = 3
+local scalemode
+local flowspeed = 0
+local twistpixmap = math.abs(infoparam)
+
+local opx,opy,opz = 0,0,0
+local pospixmap   = math.abs(infoparam)
+local posmode = 0
+
+local opw,oph = 1,1
+local scalepixmap = 0
+local pointpixmap = 0
+local optxtsize = 1
+local orgpointsize,optpointsize = 1,0
+local scaleadj = 1
+local randpoint,randalpha = 0,0
+
+local seed	= 19201
+local seedshift	= 0
+local all_dir   = Both_dir + 1
+local twist_dir = all_dir
+local pos_dir   = all_dir
+local scale_dir = all_dir
+local point_dir = all_dir
+local noalpha
+local V2A = 0
+local boh = 0
+
+if not(GetColorOptionAudio)then
+GetColorOptionAudio = {V={1,1,1,1,1,1,1},amount={0,0,0,0},AM={1,1,1}, info={false,3,7,1} , view = 0 }
+end
+
+local Audio={1,1,1,1,1,1,1}
+local bufsize = #Audio
+local infoview = 0
+local ATwist,APos,APoint,AScale  = 0,0,0,0
+local A_opt=0
+
+
+local H_shift,S_shift,V_shift,C_shift,Lim = 0,0,0,0,0
+
+
+--オプション有無判定
+
+local name = {}
+for i=-9,9 do
+ local str = obj.getoption("script_name",i,true)
+ if (str~="") then
+ table.insert(name,i.."::"..str)
+ end
+end
+
+name = table.concat(name)
+
+if string.find(name,"TwistOption") then 
+trx,try,trz = unpack(GetColorOptionTwist.twist)
+Scatter     = GetColorOptionTwist.scatter
+twistmode   = GetColorOptionTwist.twistmode
+twistpixmap = GetColorOptionTwist.pixmap
+flowspeed   = GetColorOptionTwist.flowspeed
+seed 	    = GetColorOptionTwist.seed
+seedshift   = GetColorOptionTwist.seedshift
+seedshift = math.floor(seedshift)
+twistscale  = GetColorOptionTwist.scale
+twist_dir   = GetColorOptionTwist.both
+TAudio      = GetColorOptionTwist.audio
+end
+
+if string.find(name,"PosOption") then
+opx,opy,opz  = unpack(GetColorOptionPos.xyz)
+pospixmap    = GetColorOptionPos.pixmap
+posmode      = GetColorOptionPos.mode
+pos_dir      = GetColorOptionPos.both
+PAudio       = GetColorOptionPos.audio
+end
+
+if string.find(name,"ScaleOption") then
+opw,oph     = unpack(GetColorOptionScale.wh)
+scalepixmap = GetColorOptionScale.pixmap[1]
+pointpixmap = GetColorOptionScale.pixmap[2]
+optxtsize   = GetColorOptionScale.size/10
+scale_dir   = GetColorOptionScale.both
+point_dir   = GetColorOptionScale.bothpoint
+pAudio      = GetColorOptionScale.audio_p
+--SAudio      = GetColorOptionScale.audio_s
+fig,figline = unpack(GetColorOptionScale.fig)
+noalpha     = GetColorOptionScale.noalpha
+orgpointsize,optpointsize = 0,1
+scalemode   = GetColorOptionScale.scalemode
+scaleadj    = GetColorOptionScale.scaleadj
+randpoint   = GetColorOptionScale.rand[1]
+randalpha   = GetColorOptionScale.rand[2]
+end
+
+if string.find(name,"ColorShift") then
+H_shift,S_shift,V_shift,C_shift,Lim,V2A,boh = unpack(GetColorOptionShift)
+end
+
+
+
+if string.find(name,"AudioReact") then
+Audio    = GetColorOptionAudio.V
+bufsize  = GetColorOptionAudio.info[3]
+ATwist,APos,APoint,AScale	= unpack(GetColorOptionAudio.amount)
+A_opt			= 1
+infoview = GetColorOptionAudio.view
+end
+
+local RAND_T  ={}
+local randnum = math.floor((obj.track0)*(obj.track1))
+
+for i=1,randnum do
+ table.insert(RAND_T,rand(-100000,100000,seed,i)/100000)
+end
+
+--[[
+local RC,Rt=math.modf(seedshift)
+RAND_T[]
+]]
+
+----//World Rotation//-------------------------------------------------------------
+
+--rikkyさんのrot関数に変更
+	local ROT = function(x,y,z,rx,ry,rz)
+		local toRad=0.017453292519943
+     		local rx,ry,rz = rx or obj.rx,ry or obj.ry,rz or obj.rz
+         	      rx,ry,rz = rx*toRad,ry*toRad,rz*toRad
+		local x0=x*math.cos(rz)-y*math.sin(rz)
+		local y0=x*math.sin(rz)+y*math.cos(rz)
+		local z0=z*math.cos(ry)-x0*math.sin(ry)
+		return z*math.sin(ry)+x0*math.cos(ry),y0*math.cos(rx)-z0*math.sin(rx),y0*math.sin(rx)+z0*math.cos(rx)
+	end
+
+----//linear//--------------------------------------------------------------------
+local LINEAR = function(t, t_min, t_max, v1, v2)
+
+local c =(t_max - t_min)
+   local n = t/c - t_min/c
+   local V = v2-v1
+         V = V * n + v1
+if v1>v2 then v1,v2=v2,v1 end
+       return math.max(v1,math.min(v2,V)),V
+end
+
+
+
+----//Circle Field//---------------------------------------------------------------
+--球形の斥力フィールドはどう書けばいいのやら
+
+  local SPFIELD = function(position_layer,Radius,Feather,x,y,z)
+
+   local rad = math.abs(Radius)
+   local L="layer"..position_layer
+   --if(Radius>=Feather)then Feather=Radius+100 end
+   local x0,y0,z0=x+obj.x+obj.ox, y+obj.z+obj.oz ,z+obj.z+obj.oz
+   local x1,y1,z1=gv(L..".x"),gv(L..".y"),gv(L..".z")
+   local sx,sy,sz = x0-x1,y0-y1,z0-z1
+   local len=math.sqrt((x1-x0)^2+(y1-y0)^2+(z1-z0)^2)
+   len = LINEAR(len,rad,Feather,1,0)
+  
+   if Radius>0 then
+   return len, x+sx*len, y+sy*len, z+sz*len
+   else
+   return len, x-sx*len, y-sy*len, z-sz*len
+   end
+  end
+
+
+
+--//////////    本体   ///////////////////////////////////////////////////////////////////
+
+for i=0,hn-1 do
+  for j=0,wn-1 do
+    local x = j*w/wn + fw*0.5
+	if(mut==1)then
+	  x = x + i%2*fw*0.5
+	end
+    local y = i*h/hn + fh*0.5
+    local z = 0
+
+    local col,alpha=obj.getpixel(math.floor(x),math.floor(y))
+    local H,S  =HSV(col)
+    local R,G,B=RGB(col)
+    local V = ( 0.298912 * R + 0.586611 * G + 0.114478 * B )/2.55 --Vを明度から輝度へ変更
+    local VW=V
+    local Cl=col
+	  H = (H + H_shift)%360
+	  S = (S + S_shift)%101
+	  V = (V + V_shift)%101
+	  Cl= (Cl+ C_shift)%16777215	
+    local VL = V
+	if(Lim==1)then 
+		VL=LINEAR(V,VT,100,0,100) 
+	end
+
+if(VW>=VT  and   alpha>=AT   and   col<(0xffffff-boh+1)) then -- 閾値以下はテーブルから除外  --    and   col<(0xffffff-boh+1)
+    
+    local affect = {}
+    local affect_audio = {}
+
+	local AF,TF,PF,SF,pF = 1,1,1,1,1
+	local Ha,Sa,Va,Aa,Ra,Ga,Ba,Ca = H,S,VL,alpha,R,G,B,Cl
+
+	 	affect[1]={}
+	 	
+		affect[1] = {H/360 ,S*0.01 ,VL*0.01 ,alpha, R/255, G/255, B/255, Cl/16777215}
+		affect[2] = {math.sin(toRad*(H)), (S-50)/50, LINEAR(VL,0,100.0001,-1,1), LINEAR(alpha,0,100,-1,1) ,LINEAR(R,0,255,-1,1),  LINEAR(G,0,255,-1,1),  LINEAR(B,0,255,-1,1), LINEAR(Cl,0,0xffffff,-1,1)}
+		affect[1][0] = 1	
+		affect[2][0] = 1
+		
+		affect_audio[1] = {0,0,0,0,0,0,0,0}
+		affect_audio[2] = {0,0,0,0,0,0,0,0}
+		affect_audio[1][0] = 0	
+		affect_audio[2][0] = 0
+
+		--AudioReact用------------------------------------------------------------
+		if(A_opt==1)then
+		Ha = Audio[math.ceil(bufsize/360  * H)  % bufsize+1]
+		Sa = Audio[math.ceil(bufsize*0.01 * S)  % bufsize+1]
+		Va = Audio[math.ceil(bufsize*0.01 * VL) % bufsize+1]
+		Aa = Audio[math.ceil(bufsize  * alpha)  % bufsize+1]
+		Ra = Audio[math.ceil(bufsize/255  * R)  % bufsize+1]
+		Ga = Audio[math.ceil(bufsize/255  * G)  % bufsize+1]
+		Ba = Audio[math.ceil(bufsize/255  * B)  % bufsize+1]
+		Ca = Audio[math.ceil(bufsize/16777215  * Cl)  % bufsize+1]
+		
+
+	  	affect_audio[1] = {Ha*0.01 ,Sa*0.01 ,Va*0.01 ,Aa, Ra/255,Ga/255,Ba/255,Ca*0.01}
+	  	affect_audio[2] = {math.sin(toRad*(H))*Ha*0.01,(Sa-50)/500,(Va-50)/50,(Aa-0.5)*2 , LINEAR(Ra,0,255,-1,1),  LINEAR(Ga,0,255,-1,1),  LINEAR(Ba,0,255,-1,1),LINEAR(Ca,255,1,-1,1)}
+		affect_audio[1][0] = 0
+		affect_audio[2][0] = 0
+		end
+
+	 --GCAAA="affect_audio[1]\n"..table.concat(affect_audio[1],"\n")
+	 --GCBBB="affect_audio[2]\n"..table.concat(affect_audio[2],"\n")
+	
+	AF = affect[all_dir  ][math.abs(infoparam)]		+ affect_audio[all_dir  ][math.abs(infoparam)]*AudioR   *0.01
+	TF = affect[twist_dir][twistpixmap]	* (1-ATwist)	+ affect_audio[twist_dir][twistpixmap] * (ATwist) 	*0.01
+	PF = affect[pos_dir  ][pospixmap]	* (1-APos)	+ affect_audio[pos_dir  ][pospixmap]   * (APos) 	*0.01
+	SF = affect[scale_dir][scalepixmap]		        + affect_audio[scale_dir][scalepixmap] * (AScale) 	*0.01
+	pF = affect[point_dir][pointpixmap]	* (1-APoint)	+ affect_audio[point_dir][pointpixmap] * (APoint) 	*0.01
+
+	
+
+       	--Twist用の変数用意(てきとう)---------------------------------------------
+	local scx,scy,scz = unpack(twistscale)
+	--local Axiz = {{-1,1},{0,1},{1,0}};Axiz[0]={-1,1}
+	local TWX = math.cos(toRad*LINEAR(j,0,wn-1,0,360*scx) + flowspeed*scx)
+	local TWY = math.cos(toRad*LINEAR(i,0,hn-1,0,360*scy) + flowspeed*scy)
+	local TWZ = math.sin(toRad*LINEAR(i,0,hn-1,0,360*scz) + flowspeed*scz)
+	if twistmode==1 then 
+	 TWX = math.sin(LINEAR(j,0,wn-1,0,3*scx) + flowspeed*scx)
+	 TWY = math.sin(LINEAR(i,0,hn-1,0,3*scy) + flowspeed*scy)
+	 TWZ = math.sin(LINEAR(i,0,hn-1,0,3*scz) + flowspeed*scz)
+	elseif twistmode==2 then 
+	 TWY = math.cos(LINEAR(j,0,wn-1,0,3*scy) + flowspeed*scy)
+	 TWX = math.cos(LINEAR(i,0,hn-1,0,3*scx) + flowspeed*scx)
+	 TWZ = math.cos(LINEAR(j,0,wn-1,0,3*scz) + flowspeed*scz)  --math.cos(toRad*LINEAR(j,0,wn-1,0,360*scz) + flowspeed*scz)*scz
+	elseif twistmode==3 then 
+	 TWY = math.sin(LINEAR(j,0,wn-1,0,3) + flowspeed*scy)*scy
+	 TWX = math.sin(LINEAR(i,0,hn-1,0,3) + flowspeed*scx)*scx
+	 TWZ = math.sin(LINEAR(i,0,hn-1,-1,1) + flowspeed*scz)*scz
+	elseif twistmode==4 then 
+	 TWX = math.sin((hn+wn)-((1+i)*(1+j))*0.1666666 + flowspeed*scx)*scx
+	 TWY = math.cos((hn+wn)-((1+i)*(1+j))*0.1666666 + flowspeed*scy)*scy
+	 TWZ = ((TWX*TWY)/2 * scz + flowspeed*scz)*scz
+	end
+
+	TWX,TWY,TWZ = TWX*TF, TWY*TF, TWZ*TF
+
+	--基本位置(必須)-------------------------------------------------
+	x = AF*ax + (x - w*0.5) * zoom
+	y = AF*ay + (y - h*0.5) * zoom
+	z = AF*az 
+
+	 --Pos option関係(その１)------------------------------------------
+	local opx = opx*PF
+	local opy = opy*PF
+	local opz = opz*PF
+
+	if posmode==1 then
+	x = x + opx --+ RAND_T[1+i]*Scatter
+	y = y + opy --+ RAND_T[1+j]*Scatter
+	z = z + opz --+ RAND_T[1+j+i]*Scatter
+	end
+
+	--Scale option関係(checkあり)----------------------------------------------
+	if(scalemode)then
+	if scalepixmap==0 then
+	 x = x * opw*SF
+	 y = y * oph*SF 
+	else
+	 x = x + x * opw*SF 
+	 y = y + y * oph*SF
+	end
+	end
+        
+	--Twist option関係-----------------------------------------------
+	TWX = trx*TWX + RAND_T[randnum-i]*Scatter*0.1
+	TWY = try*TWY + RAND_T[i+j+1]*Scatter*0.1
+	TWZ = trz*TWZ + RAND_T[randnum-j-i]*Scatter*0.1
+
+	--全体を回転 & Twist
+	x,y,z = ROT(x,y,z, obj.rx+TWX,  obj.ry+TWY, TWZ+obj.rz )
+	-- x,y,z = ROT(x,y,z, gv("rx")+TWX,  gv("ry")+TWY, gv("rz")+TWZ)
+       
+	
+	--Scale option関係(checkなし)----------------------------------------------
+	if not (scalemode)then
+	if scalepixmap==0 then
+	 x = x * opw*SF
+	 y = y * oph*SF 
+	else
+	 x = x + x * opw*SF 
+	 y = y + y * oph*SF
+	end
+	end
+    	   
+
+	--回転後に基準,相対座標を加算 -- 中心点は放置 ＞＜---------------
+        x = x + (obj.ox*scaleadj) + obj.x + RAND_T[1+i]*Scatter - (obj.cx*gv("zoom")*0.01)
+        y = y + (obj.oy*scaleadj) + obj.y + RAND_T[1+j]*Scatter - (obj.cy*gv("zoom")*0.01)
+        z = z + obj.oz + obj.z + RAND_T[1+j+i]*Scatter
+	
+	-------------Field---------------------------------------------
+	local LEN=1
+	if(GetColorOptionField)then
+	local x0,y0,z0=x,y,z
+	if obj.getvalue("layer"..GetColorOptionField.layer..".x") then
+	local Feather = (GetColorOptionField.radius + GetColorOptionField.feather)
+	--for key=1,#GetColorOptionField.layer do
+	LEN,x,y,z = SPFIELD(GetColorOptionField.layer,GetColorOptionField.radius, Feather,x0,y0,z0)
+	--end
+	end
+	end
+
+
+
+	--Pos option関係(その２)-------------------------------------------
+	if(posmode==2)then
+	x = x + opx --+ RAND_T[1+i]*Scatter
+	y = y + opy --+ RAND_T[1+j]*Scatter
+	z = z + opz --+ RAND_T[1+j+i]*Scatter
+	end
+	
+	alpha = alpha*obj.alpha
+       table.insert(c,col)
+       table.insert(PIX,{H,S,V,alpha,R,G,B,AF,pF,VL,col})
+       table.insert(p,x);table.insert(p,y);table.insert(p,z)
+       table.insert(P,{x,y,z})
+       table.insert(MP[obj.index+1],{x,y,z})
+     end
+
+  end
+end
+--////////////////////////////////////////////////////////////////////////////////////////
+
+
+GetColorOptionTimeEcho=false -- trueで 一応エコー on
+local echonum = 1
+local echo_z  = 0
+local delay = 1
+if(GetColorOptionTimeEcho)then
+ echonum = 4
+ echo_z  = 60
+ delay  = 3
+if(obj.index==0)then
+
+if(GetColorTimeEcho==nil)then GetColorTimeEcho={} end
+if(GetColorTimeEcho[obj.layer]==nil)then GetColorTimeEcho[obj.layer]={} end   
+local rate = obj.framerate/60
+
+table.insert(GetColorTimeEcho[obj.layer],P)
+
+	if(#GetColorTimeEcho[obj.layer]>echonum*delay)then
+	    table.remove(GetColorTimeEcho[obj.layer],1)
+	end
+
+ 
+	if(#GetColorTimeEcho[obj.layer]>echonum*delay+delay)then
+	    GetColorTimeEcho[obj.layer]={}
+	end
+end
+end
+
+
+
+
+
+
+
+if #c==0 then
+ c,p,PIX,P,A={0x000000},{0,0,0},{{360,100,100,0,255,255,255,1,1,0}},{{0,0,0}},{{0,0,0}}
+end
+
+
+
+--////////   表示   //////////////////////////////////////////////////////////////////////
+
+
+
+
+if(info>0)then
+
+  if not(obj.check0)then
+   obj.draw() --元を表示
+  end
+		 --[[
+		--DOFもどき用引数
+		local cam=obj.getoption("camera_param")
+		local cam_len = 0
+		local aperture = 800
+		local focus_dist = 1024
+		local near_vanish = 200
+		local near_start_vanish = 300 + near_vanish
+		local far_vanish = 9000
+		local far_start_vanish = far_vanish - 200
+		local blur = 0
+		 ]]
+		
+		
+  for i=1,#c do
+			for echo=0,echonum-1,delay/1 do
+   local col=c[i]
+   local Color = icolor or col
+   local H,S,V,alpha,R,G,B,AF,pF,VL = unpack(PIX[i])
+   local V_A = {alpha,V*0.01}
+   local size = (txtsize * AF * as*0.1 )*orgpointsize + (txtsize * AF * pF)*optpointsize
+   --local size = (txtsize * AF * as*0.1 ) + (txtsize * AF * pF) --+ (5 * pF)
+   local zoom = 0.8
+	
+	alpha = V_A[V2A+1]
+	
+	if(randpoint>0)then 
+	  zoom = zoom*(1-randpoint) + (zoom * RAND_T[(i+seedshift)%(#RAND_T)+1])*randpoint 
+	end
+	
+	if(randalpha>0) then
+	  alpha = alpha*(1-randalpha) + (alpha * RAND_T[(i+10+seedshift)%(#RAND_T)+1])*randalpha
+	end
+
+   local x,y,z = unpack(P[i])
+	if noalpha==1 then alpha=1 end
+  
+			if(GetColorOptionTimeEcho)then
+			 	x,y,z = unpack(GetColorTimeEcho[obj.layer][echonum-echo][i])
+				--col = GetColorTimeEcho[obj.layer][echonum-echo][i][2]
+			    	z=z+echo*echo_z	
+				zoom = zoom -- /(1+(echo/echonum+1)*echo)
+			end
+  
+		 --[[
+		--DOFもどき
+		--ゆうきさんのカメラ連動スクリプトに正確な計算方法がありましたが難しかったので。
+		cam_len = math.sqrt((cam.x-x)^2+(cam.y-y)^2+(cam.z-z)^2)
+		local nearblur    = LINEAR(cam_len,near_vanish,focus_dist-(focus_dist-aperture),1,0)
+		local near_alpha  = LINEAR(cam_len,near_vanish,near_start_vanish,1,0)
+		local far_alpha   = LINEAR(cam_len,far_start_vanish,focus_dist+far_vanish,0,1)
+		blur = nearblur + far_alpha
+		local vanish = near_alpha + far_alpha
+		alpha = math.max(0,1-vanish)^2 *alpha
+		if(cam_len>focus_dist+far_vanish-aperture)then blur = 0 end
+		 ]]
+    
+   size = size * optxtsize
+   obj.setfont("inconsolata",math.min(20,txtsize + size),4,col,0xffffff)
+   local IF = {H,S,V,string.format("%.2f",alpha),R,G,B, string.format("0x%x",col)} --info表示内容
+	 IF[0]=""
+     if(infoparam>=0)then
+        obj.setoption("billboard",orientcam)
+        obj.load("figure",fig,Color ,txtsize + size,figline)
+		
+		--[[
+		--DOFもどき実行(レンズブラーはおもいので若干のぼかし+拡大、透明度でごまかし)
+		 
+		if(blur<1)then 
+			obj.effect("ぼかし","範囲",blur*10,"サイズ固定",0) 
+			--obj.effect("領域拡張","上",blur*140,"下",blur*140,"左",blur*140,"右",blur*140)
+			zoom=zoom * math.max(1,(3*blur))
+		end
+		 ]]
+		 
+      elseif(infoparam<0)then
+        obj.load(IF[math.abs(infoparam)])
+      end
+   obj.draw(x-obj.x, y-obj.y, z-obj.z, zoom ,alpha,  -obj.rx,-obj.ry,-obj.rz)
+   
+   --obj.setoption("blend",1,"force")
+   --obj.effect("ぼかし","範囲",5*(1+zoom)) --glowsphere的な何か
+   --obj.draw(x-obj.x, y-obj.y, z-obj.z, zoom*1.8 ,alpha*0.3,  -obj.rx,-obj.ry,-obj.rz)
+   
+
+			end
+end
+
+
+
+
+  -- (infoが2ならヘルプ表示(出力変数の表示))
+
+ if info==2 then
+
+infoparam=math.abs(infoparam)
+	
+	
+   local param = {"Hue","Saturation","Luminance","Alpha","Red","Green","Blue","HEX"}
+         param[0]="not use"
+   local pacol = {"<#c8ce13>","<#d8f5c1>","<#349e97>","<#de1a72>","<#ff0000>","<#00ff00>","<#0000ff>","<#ffffff>"}
+         pacol[0]="<#de1a72>"
+   local itxt = {" = <#ff0000>nil<#>"," = Position"," = <#ff0000>nil<#>"," = Color"}
+    obj.setoption("blend",0,"force")
+    obj.load("figure","四角形",0x000000,280,1000,-0.6) 
+    obj.draw(0,0,2,1,.7,-obj.rx,-obj.ry,-obj.rz)
+    obj.load("figure","四角形",0xffffff,280,2,-0.6) 
+    obj.draw(0,0,0,1,.5,-obj.rx,-obj.ry,-obj.rz)
+    obj.setfont("inconsolata",24,4,0xffffff)
+    obj.load("text",
+   "channel / "..pacol[infoparam]..param[infoparam].."\n<#>"..
+   "<p0,+0>GC.pos"..obj.layer..itxt[put_o+1].."\n"..
+   "<p0,+0>GC.col"..obj.layer..itxt[put_o+3]
+   )
+   obj.draw(0,0,0,1,1,-obj.rx,-obj.ry,-obj.rz)
+ end
+
+
+   if(GetColorOptionAudio.info[1])then
+
+	obj.setoption("billboard",1)
+	local size = GetColorOptionAudio.info[3]
+	local figsize = 360/size
+	local adj=size/2*figsize
+	local ZOOM = obj.zoom * 100/obj.getvalue("zoom")
+	for i=1,size do
+	obj.load("figure","四角形",HSV(250/size*(i-1),100,100),figsize)
+	obj.effect("領域拡張","塗りつぶし",1,"上",GetColorOptionAudio.V[i]*0.5)
+	local x = -adj+i*figsize
+	local y = 100
+	local z = 0
+	local r =math.pi*2 * i/size
+	local rz,ry = 0,0
+	if(infoview==1)then
+	obj.setoption("billboard",0)
+	 x = math.cos(r)*100
+	 y = math.sin(r)*100
+	 rz = 360/size*i + 90
+	elseif(infoview==2)then
+	obj.setoption("billboard",0)
+	 x = math.cos(r)*100
+	 y = 0
+	 z = math.sin(r)*100
+	 ry = -360/size*i + 90
+	end
+	 obj.draw(x,y,z,ZOOM,.7,-obj.rx,-obj.ry+ry,-obj.rz+rz)
+	end
+	obj.setoption("billboard",3)
+   end
+
+
+elseif obj.check0 then  --Hide==1 then
+ obj.alpha=0
+
+end
+
+
+
+--/////////////////////////////////////////////////////////////////////////////
+
+
+
+--外部に出力 & Option変数削除
+
+
+
+if(obj.index==obj.num-1)then 
+
+if GC==nil then GC={} end
+if GVA==nil then GVA={} end
+local L="pos"..obj.layer
+
+  if put_o==1 then
+
+	GC[L]={}
+	GVA[L.."nest"] = {}
+	for i=1,obj.num do
+	 for j=1,#MP[i] do
+	     table.insert(GVA[L.."nest"],MP[i][j])
+	     if j%subpoint==0 then --間引き
+	     for k=1,3 do
+	      table.insert(GC[L],MP[i][j][k])
+	     end
+	     end
+	 end
+	end
+
+	GVA[L.."nest"][obj.num+1] = P
+	GC["col"..obj.layer]=c
+	GC["audio"]=Audio
+  else
+	GC[L]=nil
+	GC["col"..obj.layer]=nil
+	GVA[L.."nest"]=nil
+	GC["audio"]=nil
+  end
+
+MP=nil 
+
+GetColorOptionTwist=nil
+GetColorOptionPos=nil
+GetColorOptionScale=nil
+GetColorOptionField=nil
+GetColorOptionAudio=nil
+GetColorOptionShift=nil
+
+end
+
+
+
+
+
+
+-------------------------------------------------------------------------------------------
+
+@GetColor(ScaleOption)
+
+-------------------------------------------------------------------------------------------
+--track0:PointSize,-500,500,10
+--track1:scaleX,-1000,1000,100
+--track2:scaleY,-1000,1000,100
+--track3:scale,-5000,5000,100
+--check0:Twist影響,0
+--dialog:HSVARGB[0/7],local pointmap=0;双方向(point)/chk,local bothpoint=0;HSVARGB[0/7],local pixmap=0;双方向(scale)/chk,local both=0;表示図形/fig,local figure="円";表示図形ライン,local figline=1000;SizeRandom(%),local randpoint=0;AlphaRandom(%),local randalpha=0;透明度変化無し/chk, local noalpha=0;個別拡大調整/chk,local adj=1;
+
+
+
+
+local TBL = function(v,n)
+--ダイアログの値をタイプで振り分けます。
+--vがnilなら0を(nを指定すればn)、
+--テーブルならobj.indexで振り分け(要素がobj.numより少なければループ)
+--それ以外ならそのまま返します。
+
+if n==nil then n=0 end
+local V=tostring(v)
+	if v==nil then
+	return n
+	elseif not string.find(V,"table:")then
+	return v
+	else
+	return v[obj.index % (#v) + 1]
+	end
+end
+
+pixmap = TBL(pixmap)
+pixmap = pixmap%9
+pointmap = TBL(pointmap)
+pointmap = pointmap%9
+randpoint = TBL(randpoint)
+randpoint = math.min(randpoint/100,1)
+randalpha = TBL(randalpha)
+randalpha =math.min(randalpha/100,1)
+
+figre = figure or "円"
+if figure=="背景" then figure="四角形" end
+figline = figline or  1000
+
+
+
+local scale = obj.track3/100
+local w = obj.track1*scale/100
+local h = obj.track2*scale/100
+local scaleadj = 1
+if(adj==1) then 
+scaleadj = scale
+--obj.ox = obj.ox*scale
+--obj.oy = obj.oy*scale
+end
+
+
+GetColorOptionScale = {
+			wh        = {w,h},
+			pixmap    = {pixmap,pointmap},
+			size      = obj.track0,
+			both      = both+1,
+			bothpoint = bothpoint+1,
+			fig       = {figure,figline},
+			noalpha   = noalpha,
+			scalemode = obj.check0,
+			scaleadj  = scaleadj,
+			rand = {randpoint,randalpha}
+			}
+
+
+-------------------------------------------------------------------------------------------
+
+@GetColor(TwistOption)
+
+-------------------------------------------------------------------------------------------
+--track0:TwistX,-3600,3600,0
+--track1:TwistY,-3600,3600,0
+--track2:TwistZ,-3600,3600,0
+--track3:Strength,-3000,3000,100
+--check0:Strength/Scatter,0
+--dialog:回転モード[0/4],local twist_mode=0;HSVARGB[0/7],local pixmap=0;双方向/chk,local both=0;TwistX(add),local tx=0;TwistY(add),local ty=0;TwistZ(add),local tz=0;Strength(add),local str=0;FLOW SPEED,local speed=0;Flow scaleX,local sx=1;Flow scaleY,local sy=1;Flow scaleZ,local sz=1;Seed,local seed=0;SeedShift,local seedshift=0;
+
+local TBL = function(v,n)
+if n==nil then n=0 end
+local V=tostring(v)
+	if v==nil then
+	return n
+	elseif not string.find(V,"table:")then
+	return v
+	else
+	return v[obj.index % (#v) + 1]
+	end
+end
+
+twist_mode = TBL(twist_mode)
+twist_mode = twist_mode%5
+pixmap=TBL(pixmap)
+pixmap=pixmap%9
+tx = TBL(tx)
+ty = TBL(ty)
+tz = TBL(tz)
+sx = TBL(sx,1)
+sy = TBL(sy,1)
+sz = TBL(sz,1)
+str = TBL(str)
+speed = TBL(speed)
+seedshift = TBL(seedshift)
+seedshift = seedshift
+
+local Strength = obj.track3*0.01 + str*0.01
+if(obj.check0)then 
+ Strength = 1
+end
+
+tx = (tx+obj.track0)*Strength
+ty = (ty+obj.track1)*Strength
+tz = (tz+obj.track2)*Strength
+
+local scatter=0
+if(obj.check0)then 
+scatter=obj.track3 +  str
+end
+
+GetColorOptionTwist = {
+			twistmode = twist_mode,
+			twist     = {tx,ty,tz},
+			scale     = {sx,sy,sz},
+			flowspeed = obj.time*speed/100,
+			pixmap    = pixmap,
+			scatter   = scatter,
+			seed      = seed,
+			both      = both + 1,
+			seedshift = seedshift
+			}
+
+
+-------------------------------------------------------------------------------------------
+
+@GetColor(PosOption)
+
+-------------------------------------------------------------------------------------------
+--track0:X,-5000,5000,0
+--track1:Y,-5000,5000,0
+--track2:Z,-5000,5000,0
+--track3:Strength,-5000,5000,100
+--check0:Twist影響,0
+--dialog:HSVARGB[0/7],local pixmap=0;双方向/chk,local both=0;X(add),local Xa=0;Y(add),local Ya=0;Z(add),local Za=0;Strength(add),local Sa=0;
+
+
+local TBL = function(v,n)
+if n==nil then n=0 end
+local V=tostring(v)
+	if v==nil then
+	return n
+	elseif not string.find(V,"table:")then
+	return v
+	else
+	return v[obj.index % (#v) + 1]
+	end
+end
+
+pixmap=TBL(pixmap)
+pixmap=pixmap%9
+
+Xa = TBL(Xa)
+Ya = TBL(Ya)
+Za = TBL(Za)
+SA = TBL(Sa)
+
+local mode=0
+if(obj.check0)then
+ mode = 1
+else
+ mode = 2
+end
+
+local Strength = obj.track3*0.01
+      Strength = Strength + SA*0.01
+local x = (Xa+obj.track0)*Strength
+local y = (Ya+obj.track1)*Strength
+local z = (Za+obj.track2)*Strength
+
+
+GetColorOptionPos = {   
+			xyz     = {x,y,z},
+			scatter = obj.track3,
+			pixmap  = pixmap,
+			both    = both+1,
+			mode    = mode
+			}
+
+
+
+
+-------------------------------------------------------------------------------------------
+
+@GetColor(ColorShift)
+
+-------------------------------------------------------------------------------------------
+--track0:H-shift,-360,360,0,1
+--track1:S-shift,0,100,0,1
+--track2:V-shit,0,100,0,1
+--track3:colShift,0,100,0,0.01
+--dialog:明度閾値タイプ/chk,local lim=0;H-shift(add),local h=0;S-shift(add),local s=0;V-shift(add),local v=0;col-Shift(add),local c=0;輝度を透明度に/chk,local V2A=0;白飛び除外/chk,local boh=0;
+
+local TBL = function(v,n)
+if n==nil then n=0 end
+local V=tostring(v)
+	if v==nil then
+	return n
+	elseif not string.find(V,"table:")then
+	return v
+	else
+	return v[obj.index % (#v) + 1]
+	end
+end
+
+h = TBL(h)
+s = TBL(s)
+v = TBL(v)
+c = TBL(c)
+boh = TBL(boh)
+V2A = TBL(V2A)
+
+GetColorOptionShift={
+			obj.track0+h,
+			obj.track1+s,
+			obj.track2+v,
+			obj.track3*167772.16 + c,
+			lim,
+			V2A,
+			boh
+			}
+
+
+
+--[[
+-------------------------------------------------------------------------------------------
+
+GetColor(DOF+vanish)
+
+-------------------------------------------------------------------------------------------
+++--track0:focus_dist,-1024,5000,0
+++--track1:aperture,0,2000,500
+++--track2:blur,0,20,0
+++--track3:nil,-100,100,0,0.01
+++--dialog:Near Vanish,local near_vanish=10;Far Vanish,local far_vanish=8000;Far Start Vanish,local far_start_vanish=60;
+
+  local aperture    = obj.track1
+  local focus_dist  = 1024 + obj.track0
+	near_vanish = near_vanish or 80
+	far_vanish  = far_vanish or 7000
+	far_start_vanish = far_vanish - far_start_vanish
+
+GetColorOptionDOF={
+			aperture   = aperture,
+			focusdist  = focus_dist,
+			nearvanish = near_vanish,
+			farvanish  = far_vanish,
+			farstartvanish = far_start_vanish
+			}
+
+
+]]
+
+
+-------------------------------------------------------------------------------------------
+
+@GetColor(Field)
+
+-------------------------------------------------------------------------------------------
+--track0:Radius,0,1000,1
+--track1:Feather,1,1000,1
+--dialog:Layer,local layer=0;
+
+GetColorOptionField = { 
+			layer   = layer,
+			radius  = obj.track0,
+			feather = obj.track1
+			}
+
+
+
+
+-------------------------------------------------------------------------------------------
+
+@GetColor(AudioReact)
+
+-------------------------------------------------------------------------------------------
+--track0:Twist(%),0,100,0
+--track1:Pos(%),0,100,0
+--track2:Point(%),0,100,0
+--track3:Amp,0,800,100
+--check0:info,0
+--dialog:Scale(%),local Scale=0;平均化範囲,local range=3;分割数,local size=36;表示タイプ[0/2],local infoview=0;
+if(Scale==nil)then Scale=0 end
+if(infoview==nil)then infoview=0 end
+
+range = math.min(range,10)
+Scale = Scale/100
+local AudioReact = function (size,range,Type,amplitude)
+local size = size or 1
+local range = range or 3
+local Type=Type or "spectrum"
+local buf={} 
+local L=obj.layer
+local amplitude = amplitude or 1
+local num=obj.getaudio(buf,"audiobuffer",Type,size)
+
+   if(obj.index==0)then 
+	if(GA_buf_GetColor==nil)then GA_buf_GetColor={} end
+	if(GA_buf_GetColor[L]==nil)then GA_buf_GetColor[L]={} end 
+
+	table.insert(GA_buf_GetColor[L],buf)
+
+	if(#GA_buf_GetColor[L]>range)then
+		table.remove(GA_buf_GetColor[L],1)
+	end
+
+	if(#GA_buf_GetColor[L]>range+1)then 
+		GA_buf_GetColor[L]={} 
+	end
+
+   end
+
+	local V={}
+	for i=1,num do 
+	local t=0
+	 for j=0,range-1 do
+	  t=t + GA_buf_GetColor[L][range-j][i]
+	 end
+	V[i] = (t/range)*0.02 * amplitude
+        end
+
+	return V,Vtwist,Vpos,Vscale,Vpoint,num,(#GA_buf_GetColor[L][1])
+end
+
+
+local amp=obj.track3/10
+local Twist,Pos,Point = obj.track0*0.01, obj.track1*0.01, obj.track2*0.01
+
+local V = AudioReact(size,range,"spectrum",amp,Twist,Pos,Point,1)
+
+
+GetColorOptionAudio = {
+			V      = V,
+			amount = {Twist,Pos,Point,Scale},
+			info   = {obj.check0,range,size,amp},
+			view   = infoview
+			}
+
+
+
+

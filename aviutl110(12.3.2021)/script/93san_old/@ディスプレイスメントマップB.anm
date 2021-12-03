@@ -1,0 +1,298 @@
+
+------------------------------------------------------------
+@ディスプレイスメントマップB
+------------------------------------------------------------
+--track0:X/zoom ,-3000,3000,0
+--track1:Y/aspect,-3000,3000,0
+--track2:適用度,0,100,100
+--track3:サイズ,0,4000,1280
+--check0:ソースのエフェクトを反映,0
+--dialog:変形タイプ[0/2],local calc=0;ソースレイヤー,local layer=0;ﾚｲﾔ位置を反映/chk,local getpos=0;EXTのidを指定,local id=0;ｻｲｽﾞﾌｨｯﾄ[0-3],local fit=0;ぼかし,local blur=0;オフセット,offsetanc={0,0};自動オフセット/chk,auto_offset=0;オフスクリーン/chk,local offscreen=0;Info+Help/chk,local Info=0;
+
+--[[
+フレームバッファやタイムラインに置いたオブジェクトをマップソースとして
+直接扱えるようにしたディスプレイスメントマップです。
+ゆうきさんの一時保存EXT(extbuffer_core.dll と extbuffer.lua) がこのスクリプトと同じフォルダに入っている必要があります)
+一時保存scriptの配布先 http://t.co/I3jINA6
+]]
+
+
+
+
+
+obj.setanchor("offsetanc",1,"star","color",0xff0000)
+
+
+local ancX,ancY=offsetanc[1],offsetanc[2]
+if auto_offset==1 and offscreen==0 then ancX,ancY=ancX-obj.x,ancY-obj.y
+end
+
+layer= layer or 0
+blur = blur or 0
+id   = id or 0
+fit  = fit or 0
+calc = calc or 0
+local ZOOM     = obj.getvalue("zoom")/100
+local rx,ry,rz = 0,0,0
+local x,y,z    = 0,0,0
+local ox,oy,oz = obj.ox-obj.cx*ZOOM ,obj.oy-obj.cy*ZOOM ,obj.oz-obj.cz*ZOOM
+
+local sw,sh = obj.screen_w,obj.screen_h
+local  w, h = obj.getpixel()
+local mw,mh = w, h
+local p0,p1    = obj.track0,obj.track1
+local strength = obj.track2/100
+local size     = obj.track3
+local GV=obj.getvalue
+local source_txt="Layer "..layer
+
+if GV("layer"..layer..".x")==nil then layer=0 end
+
+local function CRIP(D_option)
+	if D_option==nil then return
+	else
+	  obj.effect("斜めクリッピング","中心X",D_option[1],"中心Y",D_option[2],"角度",D_option[3],"幅",D_option[4],"ぼかし",D_option[5])
+	end
+end
+
+local function COL(D_option_col)
+	if D_option_col==nil then return
+		else
+	   obj.effect("色調補正","明るさ",D_option_col[1],"ｺﾝﾄﾗｽﾄ",D_option_col[2],"輝度",D_option_col[3],"彩度",0,"飽和する",1)
+	end
+end
+
+
+require("extbuffer")
+ext_obj = "obj"
+ext_frm = "frm"
+ext_obj = extbuffer.freeid()
+ext_frm = extbuffer.freeid()
+
+extbuffer.write("obj") --元画像をcache_extに保存
+obj.load("framebuffer")
+extbuffer.write("frm") --フレームバッファをfrm_extに保存
+
+   
+--obj.copybuffer("cache:org","obj") --元画像をキャッシュ
+
+obj.setoption("drawtarget","tempbuffer",obj.screen_w,obj.screen_h) --ディスプレイスメントマップ画像用の仮想バッファを作成
+
+
+if id>0 then
+ source_txt="保存画像EXT(ID:"..id..")"
+       extbuffer.read(id)
+  mw,mh = extbuffer.size(id)
+ CRIP(D_option)
+  COL(D_option_col)
+   if getpos==1 then
+    obj.draw(GV("layer"..layer..".x"),GV("layer"..layer..".y"),0,
+           GV("layer"..layer..".zoom")/100,strength,
+           GV("layer"..layer..".rx"),GV("layer"..layer..".ry"),GV("layer"..layer..".rz"))
+   else
+    obj.draw(0,0,0, 1,strength)
+   end
+
+elseif layer<=0 then
+source_txt="フレームバッファ"
+ obj.load("framebuffer")
+ CRIP(D_option)
+  COL(D_option_col)
+ mw,mh=sw,sh
+ obj.draw(0,0,0, 1,strength)
+
+else
+ obj.load("layer",layer,obj.check0)
+ mw,mh = obj.getpixel()
+ CRIP(D_option)
+  COL(D_option_col)
+
+   if getpos==1 then
+    obj.draw(GV("layer"..layer..".x"),GV("layer"..layer..".y"),0,
+           GV("layer"..layer..".zoom")/100,strength,
+           GV("layer"..layer..".rx"),GV("layer"..layer..".ry"),GV("layer"..layer..".rz"))
+   else
+    obj.draw(0,0,0, 1,strength)
+   end
+
+end
+
+if fit<=0 then
+size=size
+elseif fit==1 then 
+ size=w     --オブジェクトサイズ   
+elseif fit==2 then 
+ size=sw    --スクリーンサイズ
+elseif fit==3 then 
+ size=mw    --マップサイズ
+end
+
+
+
+--obj.copybuffer("obj","cache:org") --元画像を呼び出し
+extbuffer.read("obj") --元画像を呼び出し
+obj.setoption("drawtarget","framebuffer")
+
+--変形に応じて領域拡張
+
+  local W=math.min(sw-w,math.abs(p0))
+  local H=math.min(sh-h,math.abs(p1))
+if fit~=1 and offscreen==0 then
+
+ if calc==0 then
+   obj.effect("領域拡張","上",H/2,"下",H/2,"右",W/2,"左",W/2)
+ elseif calc==1 then
+   W=math.min(sw-w,math.abs(p0))
+   H=math.min(sh-h,math.abs(p0))
+   obj.effect("領域拡張","上",H/2,"下",H/2,"右",W/2,"左",W/2)
+ elseif calc==2 then
+  W=math.sqrt((math.max(w,h)^2))/2
+  W=math.min(sw-w,W)
+  H=math.min(sh-h,W)
+  obj.effect("領域拡張","上",H/2,"下",H/2,"右",W/2,"左",W/2)
+ end
+end
+
+obj.alpha=obj.getvalue("alpha")
+
+
+if offscreen==1 then
+obj.effect("オフスクリーン描画")
+end
+
+
+obj.effect("ディスプレイスメントマップ",
+"param0",p0,
+"param1",p1,
+"X",ancX,
+"Y",ancY,
+"回転",0,
+"サイズ",size,
+"縦横比",0.0,
+"ぼかし",blur,
+"元のサイズに合わせる",0,
+"type",0,
+"name","*tempbuffer",
+"mode",0,
+"calc",calc)
+
+obj.ox,obj.oy,obj.oz=ox,oy,oz
+
+------以下info表示------
+
+--if obj.getoption("gui") then
+ local x,y,z=0,0,0
+ if Info==1 then
+ --obj.copybuffer("cache:org","obj")
+   extbuffer.write("obj")
+ obj.setoption("blend",0,"force")
+ obj.setoption("antialias",0)
+ 
+ obj.load("figure","背景",0x2c302e)
+ local clip=0
+ if sh>620 then clip=(sh-620)/2 end
+ obj.effect("クリッピング","右",0,"左",0,"上",clip,"下",clip)
+ 
+ obj.draw(-obj.x,-obj.y,0,  obj.zoom*100/obj.getvalue("zoom"),1,-obj.rx,-obj.ry,-obj.rz)
+
+ --obj.copybuffer("obj","cache:org")
+ extbuffer.read("obj")
+ 
+if offscreen==1 then
+ obj.draw(-obj.x,-obj.y,-obj.z,  1,0.3,-obj.rx,-obj.ry,-obj.rz)
+else
+ obj.draw(x,y,z,  1,0.3,-obj.rx,-obj.ry,-obj.rz)
+end
+
+  
+ obj.load("tempbuffer")
+     local iw,ih=obj.getpixel()
+     local S=math.min(500/iw,500/ih,1)
+     obj.effect("リサイズ","拡大率",S*100)
+ obj.draw(300-obj.x,-obj.y,-obj.z,  obj.zoom*100/obj.getvalue("zoom"),0.8,-obj.rx,-obj.ry,-obj.rz)
+  
+ 
+ obj.setfont("メイリオ",14,1,0xffffff,0x444444)
+local p0_txt   = {"X = ","拡大縮小 = ","回転 = "}
+local p1_txt   = {"Y = ","縦横比 = ","使いません"}
+local Type_txt = {"0 = 移動変形","1 = 拡大変形","2 = 回転変形"}
+local fit_txt  = {" 0 フィットしない ("..size.." pix)"," 1 元画像に合わせる ("..size.." pix)"," 2 スクリーンサイズに合わせる ("..size.." pix)"," 3 ソースサイズに合わせる("..size.." pix)"}
+if calc==2 then p1="" end
+obj.load("text","● マップソース = "..source_txt.."\n"..
+"● 変形タイプ "..Type_txt[calc+1].."\n"..
+"● (X/zoom)  "..p0_txt[calc+1]..p0.."\n"..
+"● (Y/aspect) "..p1_txt[calc+1]..p1.."\n"..
+"● サイズフィット = "..fit_txt[fit+1].."\n\n"..
+"■変形タイプ■\n   0=移動変形 , 1=拡大変形 , 2=回転変形\n"..
+"  ソースが透明かグレーなら何もせず、それよりも明るい or 暗い場合は 移動、拡大、回転させて歪ませます。\n"..
+"■ソースレイヤー■\n  変形のソースにしたいレイヤーを数字で指定します。変形に応じて領域拡張します。\n  0を指定するとフレームバッファを使用します。(デフォルト設定)\n"..
+"■レイヤー位置を反映■\n  レイヤーを指定した場合にチェックを入れるとソースレイヤーの移動、回転を反映します。\n"..
+"■ソースのエフェクトを反映■\n  指定したレイヤーで使っているフィルタを適用します。\n  ※指定したレイヤーのフィルタ有効/無効とは無関係に全て掛かります\n"..
+"  また、アニメーション効果などは反映されません。\n"..
+"■EXTのidを指定■\n  1以上を指定すると 「一時的に保存EXT」での保存先を指定し、変形のソースにします。\n"..
+"■サイズフィット■\n  サイズを其々にフィットさせます。位置、拡大率がデフォルトできっちり合う算段です。\n".. 
+"  0=フィットしない, 1=元画像に合わせる\n  2=スクリーンサイズに合わせる, 3=ソースサイズに合わせる\n"..
+"■オフスクリーン■\n  オフスクリーン描画を適用してからディスプレイスメントマップを掛けます\n"..
+"  オブジェクトの移動や回転、拡大をした後に変形します。\n  恐らくは一番扱いやすいです。"
+)
+ w,h  = obj.getpixel()
+obj.draw(-sw/2+w/2+50 -obj.x ,-sh/2+h/2+70 -obj.y,0, obj.zoom*100/obj.getvalue("zoom"),1 ,-obj.rx,-obj.ry,-obj.rz)
+--obj.load("tempbuffer")
+end
+--end
+
+
+offsetanc=nil
+D_option=nil
+D_option_col=nil
+
+if obj.index==obj.num-1 then
+extbuffer.clear("obj")
+extbuffer.clear("frm")
+end
+
+------------------------------------------------------------
+@斜めクリッピング(option)
+------------------------------------------------------------
+--track0:中心X,-2000,2000,0
+--track1:中心Y,-2000,2000,0
+--track2:角度,-3600,3600,0
+--track3:幅,-2000,2000,0
+--check0:マップBオプション化,1
+--dialog:ぼかし,local blur=0;中心X,local X=0;中心Y,local Y=0;角度,local deg=0;幅,local width=0;
+
+--[[マップBオプション化を有効化するとディスプレイスメントマップBで読み込んだマップ素材に斜めクリッピングを適用できます。
+チェックを外すと通常の斜めクリッピングとして使用できます。]]
+
+blur= blur or 0
+X=X or 0
+Y=Y or 0
+deg=deg or 0
+width=width or 0
+D_option={}
+
+ if obj.check0 then
+D_option[1]=obj.track0+X
+D_option[2]=obj.track1+Y
+D_option[3]=obj.track2+deg
+D_option[4]=obj.track3+width
+D_option[5]=blur
+ 
+ else
+obj.effect("斜めクリッピング","中心X",obj.track0+X,"中心Y",obj.track1+Y,"角度",obj.track2+deg,"幅",obj.track3+width,"ぼかし",blur)
+D_option=nil
+end
+
+------------------------------------------------------------
+@色調補正(option)
+------------------------------------------------------------
+--track0:明るさ,0,200,0
+--track1:ｺﾝﾄﾗｽﾄ,0,200,30
+--track2:輝度,0,200,150
+--[[マップBオプション化を有効化するとディスプレイスメントマップBで読み込んだマップ素材に色調補正を適用できます。
+此方はディスプレイスメントマップB専用です ]]
+
+D_option_col={}
+D_option_col[1]=obj.track0
+D_option_col[2]=obj.track1
+D_option_col[3]=obj.track2

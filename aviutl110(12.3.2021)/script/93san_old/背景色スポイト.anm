@@ -1,0 +1,361 @@
+--[[
+
+	フレームバッファから色をスポイトしてテーブルにまとめ、出力します。
+
+	アンカーは拡大率とZ軸回転で移動できます。(Z奥行きはありません)
+
+	スクリプトの下にフィルタをつけるとスポイトした色をフィルタで変えられます。
+	フィルタ全体(ぼかし用)はぼかしなどで色が壊れる場合に。(重いです)
+
+	表示を2以上にした場合に表示される colt～ から始まる部分が色を格納した変数です。
+
+	デフォルト設定だと colt.A というテーブルにすべての色が格納されていて、
+	rikkyさんのパーティクルRのフィルタ-(単色化専用)やメッシュオプションなどの
+	色をテーブルで複数指定可能なスクリプトに引き渡せます。
+
+
+	色を個別に呼びたい場合は colt.A[1] と格納されているインデックスを指定します。
+
+	デフォルトでcolt.Aになっていますが ドット以下の A はダイアログの固有名で変更できます。
+	※一文字目を数字から始めることはできなくしてあります。
+
+	--------------------------------------------------------------------------------------------------
+
+	例 : パーティクルRのオプションで使う例
+		「フィルター(単色化専用)」の設定 [ｶﾗｰ0~4変化色]に colt.A
+		「メッシュ」の設定、[線から面]にチェック、[面積色複数]に colt.A
+
+	例 : スクリプト制御を使って個別オブジェクトに引き渡す
+
+		local n = #colt.A --獲得した色の数
+  		local i = obj.index%n + 1 -- オブジェクトごとに色を呼び出す+色の数でループ
+  		local color = colt.A[i]
+  		obj.effect("グラデーション","color",color,"color2",color,"強さ",100)
+
+	--------------------------------------------------------------------------------------------------
+
+
+
+	◆rikkyさんの便利なツール 「rikky_module」があるとアンカーポイントの異常動作が防げます。
+
+		http://hazumurhythm.com/wev/downloads/
+		こちらの「DLLパック(rikky_module)ver.1.0」の中にあるrikky_module.dllを
+		このスクリプトのある場所、もしくは拡張編集本体(exedit.lua)がある場所にコピーしてください。
+
+
+
+
+	[ダイアログ設定]
+
+	◇座標⇔ﾚｲﾔ
+		チェックすると座標の数値をレイヤとして扱います。
+		オブジェクトが存在しないレイヤーを指定するとランダムな座標を生成します。
+		大体の場合チェックした瞬間に増殖します。(アンカーのX,Y座標を別個にレイヤー番号と認識するので)
+
+
+	◇座標
+		アンカーポイントの座標です。
+		「座標⇔ﾚｲﾔ」にチェックしている場合はレイヤー番号となります。
+		「座標⇔ﾚｲﾔ」にチェックしている場合、テーブルでなく数字を入れると数字の分だけランダムな座標を生成します。
+		生成された座標がトラックバーの取得数を上回るとアンカーは無効になります。
+
+
+	◇固有名
+		出力する色テーブルの添え字を変更します。数字から始めることはできません。(強制的にAがつきます)
+		A=colt.A / sdf=colt.dsf / 2=colt.A2
+
+	◇Clear
+		出力する色テーブルをすべて削除します。
+
+	◇Linemode
+		線の引き方を変更します。
+		0=取得順 / 1=ポイントから放射状 / 2=すべての組み合わせ
+
+	◇MaxNum
+		Linemodeが1か2の場合、接続する線の数を制限します。空欄で無制限。
+
+	◇消滅距離
+		点と点が一定以上離れると線が消えます。第二引数で消えるまでの範囲を指定できます。
+
+	◇RandSpeed
+		ランダム生成された座標の移動速度です。
+
+
+
+
+]]
+
+--////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+--track0:取得数,1,16,3,1
+--track1:表示,0,3,1,1
+--track2:Dot,0,40,1,1
+--track3:Line,0,30,0
+--check0:フィルタ全体(ぼかし用),0
+--dialog:座標⇔ﾚｲﾔ/chk,C=0;座標,pos={-100,0,0,0,100,0};固有名,N="A";Clear/chk,CL=0;縁/chk,F=0;LineMode,LM=0;MaxNum,M=nil;消滅距離,VN={300,50};randspeed,S=50;
+
+local ca = {C,N,CL,F,LM,VN,S,M}
+C,N,CL,F,LM,VN,S = nil,nil,nil,nil,nil,nil
+local layermode,n,clear,f,linemode,vn,spd,maxnum = unpack(ca)
+pos = pos or {0,0}
+spd = spd *.01 --ランダム移動速度
+
+local Shake = function(interval,min,max,seed,frm)
+  if not min then min,max,seed=-1,1,0 end
+    frm = frm or obj.frame
+    local min,max=min*1000,max*1000
+    local t = obj.time*100/interval
+    local p = math.floor(t)
+    t = t-p
+    local pl={}
+    pl[1]=t
+    for i=0,3*4-1 do
+      local s = seed
+      pl[i+2]=rand(min,max,s,p+math.floor(i/4)+frm)*.001
+    end
+    return obj.interpolation(unpack(pl))
+end
+
+local num = math.floor(obj.track0)
+local view = math.floor(obj.track1)
+local dotsize = obj.track2
+local linewidth = obj.track3
+linewidth = math.min(dotsize,linewidth)
+local w,h=obj.screen_w/2,obj.screen_h/2
+local gv=obj.getvalue
+local isTable = tostring(pos):find("table:")
+
+if (layermode==1) then
+  spd = spd<=0 and 0.01 or spd
+  local s = {[0]=h,w}
+  if not (isTable) then
+    local V={}
+    for i=1,pos*2 do
+      local itv = rand(200,600,i,i*2)/(spd)
+      V[i] = Shake(itv,-s[i%2],s[i%2],i,i*2)
+    end
+    pos = V
+else
+   local t,tx = pos, {".x",".y",".z"}
+   local V,A,n = {},{},2
+   for k=1,#t do
+     A[k]={}
+     for i=0,n-1 do
+       local val = obj.getvalue("layer"..t[k]..tx[i+1])
+       if not val then
+         local itv = rand(200,600,i,k)/(spd)
+         val=Shake(itv,-s[i%2],s[i%2],k,i)
+       end
+       V[k*n+i-n+1]  = val
+       A[k][i+1]     = val
+     end
+   end
+    pos = V
+  end
+  num = #pos/2
+  --if (#pos/2>16) then  num = #pos/2 end
+else
+  obj.setanchor("pos",num)
+end
+
+
+local col,alpha
+if not colt then colt = {} end
+if (#n==0) then n = "L"..obj.layer end
+local st = "colt."..n.."["
+if n:find("%d+")==1 then n="A"..n end
+colt[n] = {}
+
+local Rotz = function(x,y,m)
+  m = m or 1
+  local r=obj.getvalue("rz")*math.pi/180
+  r = r*m
+ return x*math.cos(r)-y*math.sin(r), x*math.sin(r)+y*math.cos(r)
+end
+
+local Line_p=function(p0,p1,width,col,col2,alp,st,va)
+  width = width*.5
+  st = st or 0
+  va = va or 500
+  local a=obj.alpha
+  local x0,y0=p0[1],p0[2]
+  local x1,y1=p1[1],p1[2]
+  local x,y=(x1-x0),(y1-y0)
+  local L=(x*x+y*y)^.5
+  if L>(st+va) then return 0
+  else
+  local l = math.abs(L)-st
+  l = l<0 and 0 or l
+  l = l>va and va or l
+  l = (1-l/va)^2
+  width = width*l
+  local xc,yc= -(y/L)*width, (x/L)*width
+  col2 = col2 or col
+  obj.load("figure","四角形",col,2)
+  obj.alpha = alp or 1
+  obj.putpixel(1,0,col2,1)
+  obj.putpixel(1,1,col2,1)
+  obj.drawpoly(
+   x0+xc,y0+yc,0,
+   x1+xc,y1+yc,0,
+   x1-xc,y1-yc,0,
+   x0-xc,y0-yc,0
+  )
+   obj.alpha=a
+   return 1
+ end
+end
+
+if (obj.check0) then
+  obj.load("framebuffer")
+  obj.effect()
+  obj.copybuffer("tmp","obj")
+else
+  obj.copybuffer("tmp","frm")
+end
+
+local t = {}
+local posd = {}
+local posp = {}
+for i=0,num-1 do
+  local x = pos[i*2+1]
+  local y = pos[i*2+2]
+  pos[i*2+1] = math.floor(x+.5)
+  pos[i*2+2] = math.floor(y+.5)
+  x = x*obj.getvalue("zoom")*.01
+  y = y*obj.getvalue("zoom")*.01
+  x,y = Rotz(x,y)
+  x = math.max(-w,math.min((x + obj.x),w))
+  y = math.max(-h,math.min((y + obj.y),h))
+  posp[i+1] = { Rotz(x-obj.x,y-obj.y,-1) }
+  posd[i+1] = {x,y}
+  if (obj.check0) then
+    local px = math.max(0,math.min(w*2-1,x+w))
+    local py = math.max(0,math.min(h*2-1,y+h))
+    obj.load("tempbuffer",px,py,1,1)
+    col,alpha= obj.getpixel(0,0)
+  else
+    local px = math.max(0,math.min(w*2-1,x+w-20))
+    local py = math.max(0,math.min(h*2-1,y+h-20))
+    obj.load("tempbuffer",px,py,20,20)
+    obj.effect()
+    col,alpha = obj.getpixel(19,19)
+  end
+  t[i+1] = col
+
+end
+
+linemode = linemode or 1
+maxnum = maxnum or num
+maxnum = maxnum>num and num or maxnum
+local dist,maxdist = vn[1] or 100 ,vn[2] or 10 --h*2
+if (linewidth>0) then
+  if (linemode==0) then
+    for i=1,num-1 do Line_p(posp[i],posp[i+1],linewidth,t[i],t[i+1],1,dist,maxdist) end
+  elseif (linemode==1) then
+    for i=1,num-1 do
+      for j=1,maxnum do
+        Line_p(posp[j],posp[i+1],linewidth,t[j],t[i+1],1,dist,maxdist)
+      end
+    end
+  elseif (linemode>=2) then
+    for i=1,num do
+      local cn=0
+      for j=i,num-1 do
+        --while (cn < maxnum) do
+          cn=cn + Line_p(posp[i],posp[j%num+1],linewidth,t[i],t[j%num+1],1,dist,maxdist)
+        if (cn >= maxnum)  then break end
+        --end
+      end
+    end
+  end
+end
+
+--[[
+    local pl = function(x,y,h,l,col)
+      local c,a = obj.getpixel(0,0)
+      obj.putpixel(0,0,col,1)
+      x,y=Rotz(x,y,m)
+      x0,y0 = x  ,y-h/2
+      x1,y1 = x+l,y0
+      x2,y2 = x+l,y1+h/2
+      x3,y3 = x  ,y2
+      obj.drawpoly(x0,y0,0,x1,y1,0,x2,y2,0,x3,y3,0, 0,0,1,0,1,1,0,1,1)
+      obj.putpixel(0,0,c,a)
+    end
+]]
+
+
+for i=0,num-1 do
+  local col=t[i+1]
+  local x,y = posd[i+1][1],posd[i+1][2]
+  local H,S,V = HSV(col)
+  local R,G,B = RGB(col)
+  local color = HSV(0,0,90-V*2)
+  obj.load("figure","円",col,(dotsize)*1.4)
+  obj.zoom = 100/obj.getvalue("zoom")
+  if f==1 then obj.effect("縁取り","サイズ",1,"color",color) end
+    obj.draw(x-obj.x,y-obj.y,0,1/1.4)
+    if (view>0) then
+      obj.load("figure","四角形",col,20)
+      obj.zoom = 100/obj.getvalue("zoom")
+      obj.effect("縁取り","サイズ",1,"ぼかし",30)
+      obj.draw((-w+20+i*22)-obj.x,(-h+20)-obj.y,0,1,1,0,0,-gv("rz"))
+    if (view>=2) then
+      obj.setfont("Michroma",20,1,0xffffff,color)
+      obj.load(st..(i+1).."]")
+      local w,h=obj.getpixel()
+      obj.zoom = 100/obj.getvalue("zoom")*.8
+      obj.draw(x-obj.x+w/2+2+12*.8,y-obj.y-10,0,1,1,0,0,-gv("rz"))
+    end
+    if (view>=3) then
+      obj.setfont("bender",20,1,0xffffff,color)
+      obj.load(("0x%02x%02x%02x"):format(RGB(col)))
+      obj.zoom = 100/obj.getvalue("zoom")*.8
+      obj.draw(x-obj.x+60,y-obj.y+10,0,1,1,0,0,-gv("rz"))
+    end
+  end
+end
+
+
+colt[n] = t
+if (clear==1) then colt={} end
+
+--ダイアログの小数点以下削除用
+local r = rikky_module
+if rikky_module == nil then
+	local CPATH = {}
+	local cpath = package.cpath .. ";"
+	local n
+	while(1)do
+		n = cpath:find(";")
+		if n then
+			CPATH[#CPATH + 1] = cpath:sub(1, n - 1)
+			cpath = cpath:sub(n + 1, #cpath)
+		else
+			break
+		end
+	end
+	if not CPATH[2]:find("script\\?.dll") then
+		CPATH[3]=CPATH[2]:sub(1, CPATH[2]:find("\\script\\")) .. "script\\?.dll"
+		package.cpath = package.cpath .. ";" .. CPATH[3]
+	end
+	for i=1,#CPATH do
+		local f=io.open(CPATH[i]:gsub("?", "rikky_module"),"rb")
+		if f then
+			require("rikky_module")
+      r = rikky_module
+			f:close()
+			break
+		end
+	end
+end
+
+if r then
+if (layermode==0) then
+    rikky_module.setdialogparam("pos",pos)
+end
+end

@@ -1,0 +1,190 @@
+
+-- カメラ位置による被写界深度ボケもどきです。
+-- グループ制御で複数のオブジェクトに纏めてかけたり、個別オブジェクトに使用します。
+-- カメラのZバッファ/シャドウマップを無効にするか、オブジェクトの合成モードを通常以外にすることを推奨します。
+-- 大きな画像にはあまり有効に働きません。
+
+-- 各種説明 --
+-- 焦点距離:  ピントの合う位置を前後させます。
+-- 焦点範囲:  ピントが合う範囲を広げます。
+-- Blur:      ぼかしのかかり具合を変更します。距離により指定した値から最大3倍まで変化します。
+-- 色強度:    ぼかしのかかり具合を色で表示します。
+
+-- ﾚﾝｽﾞﾌﾞﾗー: チェックするとレンズブラーを使用します。
+-- ﾌｪｰﾄﾞ:     チェックするとぼかしがBlurと同じ値になる位置で丁度透明になります。完全に透明になるとぼかしの処理をカットします。
+-- ﾌｪｰﾄﾞ%:    フェード距離を拡張します。300だとぼかしが最大値になる位置で透明になります。色の変化にも影響します。
+-- 色(近):    焦点より手前の場合の色を変更します。0で無効化します。
+-- 色(遠):    焦点より奥の場合の色を変更します。 0で無効化します。
+
+-- 中心点を含む: チェックすると中心点の移動と回転も距離計算に含みます。が、恐らく正確ではありません。
+-- 球判定: 距離判定をカメラ平面からの距離からカメラ目標点からの距離に変更します。
+
+
+--track0:焦点距離,-5000,5000,0
+--track1:焦点範囲,0,5000,100
+--track2:Blur,0,100,10
+--track3:色強度,0,100,0
+--check0:焦点を目標に固定,0
+--dialog:ﾚﾝｽﾞﾌﾞﾗｰ/chk,local lens=0;ﾌｪｰﾄﾞ/chk,local fd=0;ﾌｪｰﾄﾞ%,local fdp=100;色(近、0で無効)/col,local nearcol=nil;色(遠、0で無効)/col,local farcol=nil;中心点を含む/chk,local cp=0;球判定/chk,local mode=0;
+
+local Add = function(a,b)
+	local az = a[3] or 0
+	local bz = b[3] or 0
+	return {a[1]+b[1], a[2]+b[2], az+bz}
+end
+
+local Sub = function(a,b)
+	local az = a[3] or 0
+	local bz = b[3] or 0
+	return {a[1]-b[1], a[2]-b[2], az-bz}
+end
+
+local Scale = function(v,scale)
+	local z = v[3] or 0
+	return {v[1]*scale, v[2]*scale, z*scale}
+end
+
+local Length = function(v)
+	local x,y,z = v[1],v[2],v[3] or 0
+	return math.sqrt((x*x)+(y*y)+(z*z))
+end
+
+local LengthW = function(a,b)
+  return Length( Sub(a,b) )
+end
+
+local Normalize = function(v)
+	local x,y,z = v[1],v[2],v[3] or 0
+	local l = 1/math.sqrt(x*x + y*y + z*z)
+	return {x*l, y*l, z*l}
+end
+
+--内積、Normalizeベクトル同士なら 1=平行,0=直角,-1=逆
+local Dot = function(v0,v1)
+	local x0,y0,z0 = v0[1],v0[2],v0[3] or 0
+	local x1,y1,z1 = v1[1],v1[2],v1[3] or 0
+	return (x0*x1)+(y0*y1)+(z0*z1)
+end
+
+local Cross = function(v0,v1)
+	local x0,y0,z0 = v0[1],v0[2],v0[3] or 0
+	local x1,y1,z1 = v1[1],v1[2],v1[3] or 0
+	return {
+	(y0 * z1) - (z0 * y1),
+	(z0 * x1) - (x0 * z1),
+	(x0 * y1) - (y0 * x1)
+	}
+end
+
+
+local ROT = function(p,rx,ry,rz)
+	local p = p or {obj.ox,obj.oy,obj.oz}
+	local toRad=math.pi/180
+	local x,y,z = p[1],p[2],p[3] or 0
+	local rx,ry,rz = rx or obj.rx,ry or obj.ry,rz or obj.rz
+	rx,ry,rz = rx*toRad,ry*toRad,rz*toRad
+
+	local x0=x*math.cos(rz)-y*math.sin(rz)
+	local y0=x*math.sin(rz)+y*math.cos(rz)
+	local z0=z*math.cos(ry)-x0*math.sin(ry)
+
+	return {z*math.sin(ry)+x0*math.cos(ry), y0*math.cos(rx)-z0*math.sin(rx), y0*math.sin(rx)+z0*math.cos(rx)}
+end
+
+
+
+local focalpoint = obj.track0
+local apertrue   = obj.track1
+local blur_am    = obj.track2
+--DOF_TBL={obj.check0,(lens==1 and blur_am) or -blur_am ,focalpoint,aperture,fdp,fd}
+local color_am = (obj.track3*.01) or 0
+local load,draw,gv=obj.load,obj.draw,obj.getvalue
+local zoom = gv("zoom")*.01
+local cam  = obj.getoption("camera_param")
+local camT = {cam.tx,cam.ty,cam.tz}
+local camP = {cam.x,cam.y,cam.z}
+local camV = Sub(camT,camP)
+local screen = 1024 -- or cam.d
+
+local C1 = {obj.cx*zoom,obj.cy*zoom,obj.cz}
+if cp==1 then  C1 = ROT(C1) end
+local P0 = {obj.x+obj.ox, obj.y+obj.oy, obj.z+obj.oz}
+      P0 = Sub(P0,C1)
+local P1 = Sub(P0,camP)
+
+--カメラ視点ベクトル=カメラ平面の法線
+local D = Length(camV)
+if D<1 then D=1 end
+
+local L
+--法線の単位ベクトルN
+local N = Scale(camV,1/D) --Normalize(camV)
+
+--カメラ平面上の点P
+local P = Scale(N,(obj.check0 and D) or screen)
+
+
+if mode==1 then
+ --カメラ目標とP0の距離
+ L = Length(Sub(camP,P0)) - (obj.check0 and D or screen )
+else
+ --カメラ平面と点P1の距離
+ L = Dot(Sub(P1,P),N) 
+end
+
+local R = L - focalpoint
+local location = (R>0 and 2) or 1
+local D = math.abs(R)
+		  D = (D-apertrue)/screen
+      R = (R-apertrue)/screen
+-- if D<0 then D=0 end
+local fdp = fdp or 100
+			fdp = fdp*.01
+local alp = math.max(0,math.min(fdp-D,fdp)) / fdp
+local blur = blur_am * math.min(D,3) --ぼかしは最大300まで。
+
+
+cam_depth = {
+	alp = alp,
+	d = math.max(0,D),
+	far = math.max(0,R),
+	near = -math.min(0,R),
+	R=R
+}
+
+local o={obj.ox,obj.oy,obj.oz}
+
+if fd==1 then
+ obj.alpha = obj.alpha*alp
+end
+
+if obj.alpha>0 then
+
+	if lens==1 then
+	 obj.effect("レンズブラー","範囲",blur,"サイズ固定",0)
+	else
+	 obj.effect("ぼかし","範囲",blur)
+	end
+
+	if color_am>0 then
+		if nearcol==nil then
+		   nearcol= HSV( 120*alp, 50+30*(1-alp), 40+40*(1-alp) )
+	        end
+
+		if farcol==nil then
+		   farcol = HSV( 120+(95)*(1-alp), 50+30*(1-alp), 90-20*(1-alp) )
+		end
+
+		local color = {nearcol,farcol}
+		color = color[location]
+
+		if color==0 then
+		 return
+		else
+		 obj.effect("グラデーション","強さ",100 * color_am * (1-alp) ,"color",color,"color2",color,"blend",0)
+		end
+	end
+
+
+
+end

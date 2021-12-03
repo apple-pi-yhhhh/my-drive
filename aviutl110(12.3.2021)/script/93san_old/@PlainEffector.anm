@@ -1,0 +1,580 @@
+------------------------------------------------------------------------------------------------------------------------
+@Effector(Line)
+------------------------------------------------------------------------------------------------------------------------
+--track0:Radius,1,1000,100
+--track1:Strength,-100,100,100
+--track2:Random,-1000,1000,0
+--track3:Zoom,-200,500,0
+--check0:invert,0
+--dialog:線⇔線分/chk,local md=1;offset,local offset=0;pos,pos={0,0,0,0,0,0};layerA,local l_A=0;layerB,local l_B=0;col/col,local col=0xf74d52;色強度,local col_am=100;FieldMode[0/4],local fld=0;fade/chk,local fd=0;view/chk,local view=0
+
+
+if not Vector then
+
+    --単純なVector----------------------------------------------------------------------
+
+    local Sub	= function(a,b) return {a[1]-b[1],a[2]-b[2],a[3]-b[3]} end
+    local Add	= function(a,b) return {a[1]+b[1],a[2]+b[2],a[3]+b[3]} end
+    local Scale	= function(v,s) return {v[1]*s,v[2]*s,v[3]*s} end
+    local Mul	= function(a,b) return {a[1]*b[1],a[2]*b[2],a[3]*b[3]} end
+    local Div	= function(a,b) return {a[1]/b[1], a[2]/b[2], a[3]/b[3]} end
+    local Len	= function(v) return (v[1]*v[1]+v[2]*v[2]+v[3]*v[3]) end
+    local Lensq	= function(a,b) return Len( Sub(a,b) ) end
+    local Length	= function(v) return (v[1]*v[1]+v[2]*v[2]+v[3]*v[3])^.5 end
+    local Normalize	= function(v) local L=Length(v);local l=1/L; return {v[1]*l,v[2]*l,v[3]*l},L end
+    local Cross	= function(a,b) return  {a[2]*b[3]-a[3]*b[2],a[3]*b[1]-a[1]*b[3],a[1]*b[2]-a[2]*b[1]} end
+    local Dot	= function(a,b) return (a[1]*b[1] + a[2]*b[2] + a[3]*b[3]) end
+    local eps	= 1e-08
+
+    -- 点Aと平面上の最近点(A=座標 P=平面上の点 N=平面の法線 )----------------------------
+    local Pos_p_on_plane = function(A,P,N)
+
+        local PA = {A[1]-P[1],A[2]-P[2], A[3]-P[3]}
+        local d = (N[1]*PA[1] + N[2]*PA[2] + N[3]*PA[3])
+        return {A[1]-(N[1]*d), A[2]-(N[2]*d), A[3]-(N[3]*d)}
+    end
+
+    -- 点Aと面abc上の最近点------------------------------------
+    local Pos_p_on_poly = function(A,a,b,c)
+
+      local AB = Sub(b,a)
+      local BC = Sub(c,b)
+      local N = Normalize(Cross(AB,BC))
+      --local PA = Sub(A,a)
+      --local d = Dot( N, PA )
+      --return Sub(A,Scale(N,d)),N
+      return Pos_p_on_plane(A,a,N)
+    end
+
+    -- 点Pと線abの距離------------------------------------
+    local Dist_p_line = function(P,a,b)
+
+      local ab,aP = Sub(b,a), Sub(P,a)
+      local cross   = Cross(ab,aP)
+      local len   = Length(ab)
+      if len==0 then len=eps end
+      local dst   = Length(cross) / len
+      return dst
+    end
+
+    -- 点Pと線分abの距離------------------------------------
+    local Dist_p_segment = function(P,a,b)
+
+    	local AB = Sub(b,a)
+      if	 ( Dot(AB,Sub(P,a) ) < eps ) then
+        return Length(Sub(a,P))
+      elseif ( Dot(AB,Sub(P,b) ) > eps ) then
+        return Length(Sub(b,P))
+      else
+        return Dist_p_line(P,a,b)
+      end
+    end
+
+
+    -- 点Pと線ab上の最近点------------------------------------
+    local Pos_p_on_line=function(P,a,b)
+
+    	local AB = Sub(b,a)
+    	local N = Normalize(AB) 	--線abの単位ベクトル
+    	local D = Dot(N, Sub(P,a))	--aPベクトルと内積
+    	return Add(a,Scale(N,D))
+    end
+
+    -- 点Pと線分ab上の最近点------------------------------------
+    local Pos_p_on_segment=function(P,a,b)
+
+    	local AB = Sub(b,a)
+      	if	( Dot(AB,Sub(P,a) ) < eps ) then
+       		return a
+     	elseif	( Dot(AB,Sub(P,b) ) > eps ) then
+       		return b
+     	else
+    		return Pos_p_on_line(P,a,b)
+    	end
+    end
+
+
+    -- 線分ABと平面の交点------------------------------------
+    --Intersect_plane_Line
+    local Pos_plane_intersection_segment = function(
+
+    	A,-- 線分始点
+    	B,-- 線分終点
+    	n,-- 平面法線
+    	d,-- 平面法線の長さ
+    	PL-- = {n[1],n[2],n[3],d=d} -- ax+by+cz-d=0
+      	)
+    	--平面上の点P
+      	local P = Scale(n,d)
+    	local PA = Sub(A,P)
+    	local PB = Sub(B,P)
+    	--平面法線と内積
+    	local dot_PA = Dot(PA,n)
+    	local dot_PB = Dot(PB,n)
+    	--線端が平面上にあった時の誤差を0に
+    	if math.abs(dot_PA) < eps then  dot_PA = 0 end
+    	if math.abs(dot_PB) < eps then  dot_PB = 0 end
+    	--交差判定
+    	if (dot_PA == 0) and (dot_PB == 0) then
+    	-- 線端が平面上で計算不可
+    		return false
+    	elseif  ((dot_PA >= 0) and (dot_PB <= 0)) or ((dot_PA <= 0) and (dot_PB >= 0))  then
+    	-- 内積正負が異なれば交差
+    		local AB = Sub(B,A)
+    	-- 交点とAの距離 交点とBの距離 = dot_PA , dot_PB
+    		local ratio = math.abs(dot_PA) / ( math.abs(dot_PA) + math.abs(dot_PB) )
+    		return {
+    			A[1] + ( AB[1] * ratio ),
+    			A[2] + ( AB[2] * ratio ),
+    			A[3] + ( AB[3] * ratio )
+    		}
+    	else
+    	--交点なし
+    		return false
+    	end
+
+    end
+
+    --線AB,線CDで構成される２直線の交点(なければ最近点)------------------------------------
+    local Pos_intersection_2line = function(A,B,C,D)
+
+      local AB = Sub(A,B)
+      local CD = Sub(C,D)
+      --計算不可
+      if( Len(AB)==0) or (Len(CD)==0) then return 0,nil,nil end
+
+      local n1 = Normalize(AB)
+      local n2 = Normalize(CD)
+      local w1 = Dot( n1, n2 )
+      local w2 = 1 - w1*w1
+      if( w2 == 0 ) then  return 0,false,false end
+      local AC = Sub(A,C)
+      local d1 = (Dot(AC,n1)-w1*Dot(AC,n2)) / w2
+      local d2 = (w1*Dot(AC,n1)-Dot(AC,n2)) / w2
+      local ret1,ret2
+      --AB上の最近点
+      ret1 = Add(A,Scale(n1,d1))
+      --BC上の最近点
+      ret2 = Add(C,Scale(n2,d2))
+
+      if( Len(Sub(ret1,ret2)) < eps ) then
+          return 1,ret1,ret2 --交点
+      else
+          return 2,ret1,ret2 --交点なし、最近点
+      end
+    end
+
+    --法線との反射ベクトル s=法線(正規化),v=入射ベクトル------------------------------------
+    local Refrect_N=function(s,v)
+      local t = -(s[1]*v[1] + s[2]*v[2] + s[3]*v[3])/(s[1]*s[1] + s[2]*s[2] + s[3]*s[3])
+      return {v[1]+(t*s[1]*2), v[2]+(t*s[2]*2), v[3]+(t*s[3]*2)}
+    end
+
+
+    Vector = {
+    	Sub    = Sub,
+    	Add    = Add,
+    	Scale  = Scale,
+    	Len    = Len,
+    	Lensq  = Lensq,
+    	Length = Length,
+    	Norm   = Normalize,
+    	Normalize= Normalize,
+    	Cross  = Cross,
+    	Dot    = Dot,
+    	Mul    = Mul,
+    	Div    = Div,
+
+    	Pos_p_on_plane = Pos_p_on_plane,
+    	Pos_p_on_poly  = Pos_p_on_poly,
+    	Dist_p_line    = Dist_p_line,
+    	Dist_p_segment = Dist_p_segment,
+    	Pos_p_on_line                  = Pos_p_on_line,
+    	Pos_p_on_segment               = Pos_p_on_segment,
+    	Pos_plane_intersection_segment = Pos_plane_intersection_segment,
+    	Pos_intersection_2line         = Pos_intersection_2line,
+
+    	Refrect_N = Refrect_N
+    }
+
+end
+
+---------------------------------------------------------------------------------
+if not FXtools then
+    	FXtools = {}
+
+    -- 引数に入れたレイヤーの座標をテーブルにして返す
+    FXtools.GL = function(...)
+    	local tx = {[0]=".x",".y",".z"}
+    	local V,A,n = {},{},3
+    	for k=1,select("#",...) do
+    		A[k]={}
+    		for i=0,n-1 do
+    			local val = obj.getvalue("layer"..select(k,...)..tx[i])
+    			V[k*n+i-n+1] = val
+    			A[k][i+1] = val
+    		end
+    	end
+    	return V,A
+
+    end
+
+    -- tがt1からt2に変化する値をv1～v2の範囲に変換
+    FXtools.Linear = function(t, t1, t2, v1, v2, nolimit )
+         v1 = v1 or 0
+         v2 = v2 or 1
+         local c = (t2 - t1)
+         local n = t/c - t1/c
+         local V = v2-v1
+               V = V * n + v1
+          if (nolimit==1) then
+             return V
+          else
+           if (v1>v2) then v1,v2=v2,v1 end
+             V = math.max(v1,math.min(v2,V))
+             return V
+          end
+      end
+
+    -- 回転行列
+    FXtools.Rot = function(v,r)
+    	v = v or {0,0,-1}
+    	r = r or {obj.rx,obj.ry,obj.rz}
+    	local tR = math.pi/180
+    	local cos,sin=math.cos,math.sin
+    	local rx,ry,rz = r[1]*tR, r[2]*tR, r[3]*tR
+    	local x,y,z = v[1],v[2],v[3]
+    	local x0=x*cos(rz)-y*sin(rz)
+    	local y0=x*sin(rz)+y*cos(rz)
+    	local z0=z*cos(ry)-x0*sin(ry)
+    	return z*sin(ry)+x0*cos(ry), y0*cos(rx)-z0*sin(rx), y0*sin(rx)+z0*cos(rx)
+    end
+
+    --相対座標、中心点を移動後に回転行列
+    FXtools.Rotc = function(pos,anc,rot)
+    	pos = pos or {obj.ox, obj.oy, obj.oz}
+    	anc = anc or {obj.cx, obj.cy, obj.cz}
+    	rot = rot or {obj.rx, obj.ry, obj.rz}
+    	local zoom = obj.getvalue("zoom")*.01
+    	local ox,oy,oz = pos[1],pos[2],pos[3]
+    	local cx,cy,cz = anc[1]*zoom,anc[2]*zoom,anc[3]*zoom
+    	local x,y,z = FXtools.Rot({ox-cx, oy-cy, oz-cz},rot)
+    	return  x+cx, y+cy, z+cz
+    end
+
+    -- カメラ向きになる線を描画
+    FXtools.P_line3D = function(
+    	p0,	--座標 {x,y,z}
+    	p1,	--座標 {x,y,z}
+    	width,	--[線幅]
+    	col,	--[色]
+    	alp,	--[透明度]
+    	st,	--[消滅開始距離]
+    	va,	--[消滅までのフェード範囲]
+    	nst,	--[消滅開始距離(st以下)]
+    	nva,	--[消滅までの範囲(nst以下～0まで)]
+    	t	--[0~1で線を伸ばす]
+    	)
+    	local V = Vector
+    	width = width or 1
+    	alp = alp or 1
+    	st,va = st or 500,va or 1000
+    	nst,nva = nst or 1 ,nva or 0
+    	t = t or 1
+    	t = math.max(0,math.min(1,t))
+    	p0[3] = p0[3] or 0
+    	p1[3] = p1[3] or 0
+    	local a=V.Sub(p1,p0)
+    	local len=V.Length(a)
+    	if len>(st+va) then return 0,p1 end
+    	if len<(nst-nva) then return 0,p1 end
+
+    	local lin = FXtools.Linear(len,st,va,1,0)
+    	lin = lin * FXtools.Linear(len,nva,nst ,0,1)
+    	width = width*lin
+    	alp = alp*lin
+    	local g=obj.getvalue
+
+    	if col then obj.putpixel(0,0,col,1) end
+
+    	local c=obj.getoption("camera_param")
+    	local b={c.x-p0[1], c.y-p0[2], c.z-p0[3]}
+    	local n = V.Cross(a,b)
+    	local l = V.Length(n)
+    	local nx,ny,nz = (n[1]/l)*width*.5, (n[2]/l)*width*.5 ,(n[3]/l)*width*.5
+    	p1 = V.Add( V.Scale(p1,t), V.Scale(p0,1-t))
+    	obj.drawpoly(
+    		p0[1]-nx,p0[2]-ny,p0[3]-nz,
+    		p1[1]-nx,p1[2]-ny,p1[3]-nz,
+    		p1[1]+nx,p1[2]+ny,p1[3]+nz,
+    		p0[1]+nx,p0[2]+ny,p0[3]+nz,
+    		0,0,0,0,0,0,0,0,alp
+    		)
+    	return 1
+    end
+
+    -- 球形押し出し
+    FXtools.SPField = function(P,A,radius,strength,mode)
+    	A = A or {0,0,0}
+    	P = P or  {obj.ox, obj.oy, obj.oz}
+    	strength = strength or 100
+    	radius = radius or 50
+    	mode = mode or 0
+    	local AP  = {P[1]-A[1],P[2]-A[2],P[3]-A[3]}
+    	local len = math.sqrt(AP[1]*AP[1] + AP[2]*AP[2] + AP[3]*AP[3])
+    	--条件の符号を反転すると動作も反転
+    	-- modeが1の場合は(len>radius)がtrue
+    	local state = (mode==1 and len>radius) or (mode~=1  and len<radius) or false
+    	if state then
+    		local N    = {AP[1]/len, AP[2]/len, AP[3]/len}
+    		local push = (radius - len) * strength*.01
+    		local PV   = {N[1]*push,N[2]*push,N[3]*push}
+    		return  P[1]+PV[1],P[2]+PV[2],P[3]+PV[3]
+    	else
+    		--範囲外は何もせずPをそのまま返す
+    		return P[1],P[2],P[3]
+    	end
+    end
+
+    -- -1~1の範囲のランダム,biadで偏りを持たせます。
+    FXtools.Randbias = function(bias,seed,frm)
+        local v = obj.rand(-1000,1000,seed or 1, frm or 1)*.001
+        v = (v + bias) / (1+math.abs(bias)) + 1
+        return v
+    end
+    -- -1~1の範囲のランダム,precisionは小数点以下を作る
+    FXtools.Rand = function(min,max,seed,frame,precision)
+    	precision = precision or 1
+    	precision = precision<=1 and 1 or precision
+    	--min,max = min * precision, max * precision
+    	local dp = 1/precision
+    	local x = rand(min,max,seed+1,frame+1000)*dp
+    	local y = rand(min,max,seed+2,frame+2000)*dp
+    	local z = rand(min,max,seed+3,frame+3000)*dp
+    	return x,y,z
+    end
+
+    FXtools.SPField2 = function(P,A,radius,strength,mode)
+    	P = P or {obj.ox, obj.oy, obj.oz}
+    	if not tostring(A):find("table:") then
+    		A = FXtools.GL(A)
+    	end
+    	A ={A[1]-obj.x, A[2]-obj.y, A[3]-obj.z}
+    	local x,y,z,a = FXtools.SPField(P,A,radius,strength,mode)
+    	return x,y,z,a
+    end
+
+    -- 一行で済むスクリプト制御用
+    -- Pはオブジェクトの座標 a,bはレイヤー番号
+    FXtools.Linefx = function(P,a,b,mode)
+    	P = P or {obj.ox+obj.x,obj.oy+obj.x,obj.ox+obj.z}
+    	local A,B = FXtools.GL(a),FXtools.GL(b)
+    	if mode==1 then
+    		return Vector.Dist_p_segment(P,A,B)
+    	end
+    	return Vector.Dist_p_line(P,A,B)
+    end
+
+
+end
+
+
+ --[[
+    FXtoolsとVectorはグローバル変数になっているのでスクリプト制御で使えてしまう
+    以下コピペで動くはず。※線を作るレイヤーがないと動きません
+
+    local f = FXtools	-- 一旦ローカル化
+    local a,b = 7,8 	-- 線を作るためのレイヤーの番号
+    local n,d = 9,50	-- 数、幅
+    local radius = 400 	-- エフェクト影響範囲
+    local fix = (n-1)/2*d	-- 中央寄せ
+    local cn = 1		--カウンター
+    local function Rd(n) return rand(-100,100,1,n)*.01 end
+    for i=0,n-1 do
+     for j=0,n-1 do
+      for k=0,n-1 do
+       local x,y,z = i*d-fix ,j*d-fix, k*d-fix
+       -- エフェクターで距離を出す
+       local len = f.Linefx({x+obj.x,y+obj.y,z+obj.z},a,b,1)
+       -- 距離をLinearで0,1に変換
+       local v  = f.Linear(len,0,radius)
+       local rv = 1-v
+       x = x+x*Rd(cn)*rv
+       y = y+y*Rd(cn*2)*rv
+       z = z+z*Rd(cn*3)*rv
+       obj.draw(x,y,z,v,v)
+       cn = cn + 1
+      end
+     end
+    end
+]]
+
+----------------------------------------------------------------------------------------------------------------------------
+
+
+local radius 	      = obj.track0
+local strength	      = obj.track1*.01
+local random_amoumt    = obj.track2*.001
+local zm 	= obj.track3*.01
+local zoom = obj.getvalue("zoom")*.01
+local camera_mode = obj.getoption("camera_mode")
+camera_mode = 1 -- camera_mode>0 and 1 or 0
+pos = pos or {0,0,0, 0,0,0}
+
+if not tostring(col):find("table:") then
+	col = {col}
+end
+local color = col[obj.rand(1,#col,seed or 1,obj.index)]
+
+l_A = l_A or 0
+l_B = l_B or 0
+col_am = col_am or 100
+fld = fld or 0
+fld = fld>5 and 4 or fld
+
+local lA = l_A
+local lB = l_B
+if (l_A=="cam" or not obj.getvalue("layer"..l_A..".x")) then lA=0 end
+if (l_B=="eye" or not obj.getvalue("layer"..l_B..".x")) then lB=0 end
+
+local A,B = {0,0,0},{0,0,0}
+if (lA==0 and lB==0) then
+	obj.setanchor("pos",2,"xyz")
+	A = {pos[1],pos[2],pos[3]}
+	B = {pos[4],pos[5],pos[6]}
+elseif (lB~=0 and lA==0) then
+	obj.setanchor("pos",1,"xyz")
+	A = {pos[1],pos[2],pos[3]}
+elseif (lA~=0 and lB==0) then
+	obj.setanchor("pos",1,"xyz")
+	B = {pos[1],pos[2],pos[3]}
+end
+
+local xyz = {obj.x, obj.y, obj.z}
+--local A,B = {pos[1],pos[2],pos[3]}, {pos[4],pos[5],pos[6]}
+
+-- setanchorを使う場合はアンカーを回転行列で回転後、拡大率と合わせる
+A = Vector.Scale({FXtools.Rot(A)},zoom)
+B = Vector.Scale({FXtools.Rot(B)},zoom)
+
+-- 他のレイヤーの座標使う場合は基準座標を引く
+if (lA>0) then
+	A = FXtools.GL(lA)
+	A = Vector.Sub(A,xyz)
+end
+if (lB>0) then
+	B = FXtools.GL(lB)
+	B = Vector.Sub(B,xyz)
+end
+
+-- ダイアログ layerA = "cam",または layerB = "eye"の場合はカメラの位置を使用するモードへ
+if (l_A=="cam") then
+	local cam  =obj.getoption("camera_param")
+	A = {cam.x,cam.y,cam.z}
+	A = Vector.Sub(A,xyz)
+end
+if (l_B=="eye") then
+	local cam  =obj.getoption("camera_param")
+	B = {cam.tx,cam.ty,cam.tz}
+	B = Vector.Sub(B,xyz)
+end
+
+--オブジェクトの座標P
+local P = {obj.ox-obj.cx*zoom, obj.oy-obj.cy*zoom, obj.oz-obj.cz*zoom}
+
+-- Pと線分ABとの距離を計算
+local len=0
+if (md==1) then
+	len = Vector.Dist_p_segment(P,A,B)
+else
+	len = Vector.Dist_p_line(P,A,B)
+end
+
+-- 押し出しフィールド、フィールド中心はオブジェクト座標Pと線AB上の最近点を使う
+if (fld>0 and fld<3) then
+	local fieldpos = {0,0,0}
+	if (md==1) then
+		fieldpos = Vector.Pos_p_on_segment(P,A,B)
+	else
+		fieldpos = Vector.Pos_p_on_line(P,A,B)
+	end
+	local X,Y,Z = FXtools.SPField(P,fieldpos,radius,strength*100,fld-1)
+	--移動後の座標X,Y,Zは中心点を引いてあるので加算
+	obj.ox,obj.oy,obj.oz = X+obj.cx*zoom, Y+obj.cy*zoom, (Z+obj.cz*zoom) * camera_mode
+end
+
+local l = FXtools.Linear(len,offset,offset+radius,0,1)^2
+--l=require("easing").inOutCubic(l,0,1,1)
+
+if (obj.check0) then
+	l=1-l
+end
+
+EffectorValue = EffectorValue or {}
+EffectorValue.Line = l
+
+local grad_strength = (strength<0 and -strength*l ) or strength*(1-l)
+if (grad_strength>0) then
+	obj.effect("グラデーション","color",color,"color2",color,"強さ",col_am * grad_strength,"blend",0)
+	--obj.effect("単色化","輝度を保持する",0,"color",color,"強さ",col_am * grad_strength)
+end
+
+obj.zoom = obj.zoom + (1-l) * zm
+if (obj.zoom < 0) then obj.zoom=0 end
+if (fd==1) then obj.alpha = obj.alpha*l end
+
+if (random_amoumt~=0) then
+	local seed = seed or 0
+	obj.ox = obj.ox + rand(-1000,1000,seed + 1,obj.index+1000)*random_amoumt * (1-l)
+	obj.oy = obj.oy + rand(-1000,1000,seed + 2,obj.index+2000)*random_amoumt * (1-l)
+	obj.oz = obj.oz + rand(-1000,1000,seed + 3,obj.index+3000)*random_amoumt * (1-l) * camera_mode
+end
+
+
+-- 押し出しフィールド、ダイアログが3,4の場合はランダム移動後に動作
+if (fld>2) then
+	local P = {obj.ox-obj.cx*zoom, obj.oy-obj.cy*zoom, obj.oz-obj.cz*zoom}
+	local fieldpos = {0,0,0}
+	if (md==1) then
+		fieldpos = Vector.Pos_p_on_segment(P,A,B)
+	else
+		fieldpos = Vector.Pos_p_on_line(P,A,B)
+	end
+	local X,Y,Z = FXtools.SPField(P,fieldpos,radius,strength*100,fld-3)
+	--移動後の座標X,Y,Zは中心点を引いてあるので加算
+	obj.ox,obj.oy,obj.oz = X+obj.cx*zoom, Y+obj.cy*zoom, (Z+obj.cz*zoom) * camera_mode
+end
+
+if fld<0 then
+	local r = math.pi*2/obj.num * obj.index
+	obj.ox = obj.ox*(l) + math.cos(r)*radius*(1-l)*strength
+	if fld==-1 then
+		obj.oy = obj.oy*(l) + math.sin(r)*radius*(1-l)*strength
+	else
+		obj.oy = obj.oy*(l)
+		obj.oz = obj.oz*(l) + math.sin(r)*radius*(1-l)*strength
+	end
+end
+
+if (view==1 and obj.index==obj.num-1) then
+	obj.effect()
+	obj.draw()
+	local rx,ry,rz,zm_,alp = obj.rx,obj.ry,obj.rz,obj.zoom,obj.alpha
+	obj.zoom = 1
+	obj.alpha =1
+	local p =  {obj.ox-obj.cx*zoom, obj.oy-obj.cy*zoom, obj.oz-obj.cz*zoom}
+	obj.rx,obj.ry,obj.rz = 0,0,0
+	local PA=Vector.Sub(A,p)
+	local PB=Vector.Sub(B,p)
+	obj.setoption("billboard",0)
+	FXtools.P_line3D(PA,PB,1+offset,color,.8,2000,3000)
+	obj.load("figure","円",color,60,2)
+	obj.setoption("billboard",3)
+	obj.zoom=.5
+	obj.draw(A[1],A[2],A[3],1,1,-rx,-ry,-rz)
+	obj.draw(B[1],B[2],B[3],1,1,-rx,-ry,-rz)
+	obj.rx,obj.ry,obj.rz,obj.zoom,obj.alpha = rx,ry,rz,zm_,alp
+	obj.setoption("draw_state",false)
+	obj.setoption("billboard",0)
+	obj.alpha=0
+end

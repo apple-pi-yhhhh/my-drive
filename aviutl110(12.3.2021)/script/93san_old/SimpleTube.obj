@@ -1,0 +1,200 @@
+--track0:半径,10,9000,1000
+--track1:奥行,-9000,9000,400
+--track2:ランダム度,-200,200,0,0.01
+--track3:ねじれ,-200,200,0,0.01
+--check0:描画,1
+--dialog:縦横分割数,local Pnum={10,30};色[テーブル可]/col,local color=0x0e769f;seed,local seed=0;Fade/chk,local fade=0;Fog/chk,local fog=1;FogColor/col,local fogcolor=0xf9f9f9; [fade/fog]位置,local fade_dist=4000;[fade/fog]速度,local fade_spd=10;透明度ランダム,local alpharand=0;中央基準/chk,local both=0;時間変化,local time=0;Wave[a/t/s],local wave={0,1,10};点サイズ,local point=0;
+ 
+--Wave[a/t/s] サイン波でうねらせます。  a/amp = 波の影響度  t/time = 波の速さ ,s/scale = 波の周期幅
+
+local SPC = function(r,phi,theta) -- 球座標 (r,φ,θ)
+	local x = math.sin(theta)*math.cos(phi)
+	local y = math.sin(theta)*math.sin(phi)
+	local z = math.cos(theta) 
+	return x*r,  y*r,  z*r
+end
+
+
+local Shake = function(interval,min,max,seed)
+
+	if not min then min,max,seed=-1,1,0 end
+	seed=seed or 0
+	if interval==0 then 
+	return rand(min,max,seed)
+	else
+	local s=seed
+	min,max=min*1000,max*1000
+	local t = obj.time*100/interval
+	local p = math.floor(t)
+	t = t-p
+	local x0 = rand(min,max,s,p+0)/1000
+	local x1 = rand(min,max,s,p+1)/1000
+	local x2 = rand(min,max,s,p+2)/1000
+	local x3 = rand(min,max,s,p+3)/1000
+	return obj.interpolation(t,x0,x1,x2,x3)
+	end
+end
+
+
+local ROT = function(x,y,z,rx,ry,rz)
+	local toRad=math.pi/180
+	local x,y,z = x or obj.ox, y or obj.oy, z or obj.oz
+     	local rx,ry,rz = rx or obj.rx,ry or obj.ry,rz or obj.rz
+         	      rx,ry,rz = rx*toRad,ry*toRad,rz*toRad
+	local x0=x*math.cos(rz)-y*math.sin(rz)
+	local y0=x*math.sin(rz)+y*math.cos(rz)
+	local z0=z*math.cos(ry)-x0*math.sin(ry)
+	return z*math.sin(ry)+x0*math.cos(ry),y0*math.cos(rx)-z0*math.sin(rx),y0*math.sin(rx)+z0*math.cos(rx)
+end
+
+
+
+local Pnum = Pnum or {10,10}
+
+local toRad = math.pi/180
+local pi = math.pi
+local R,P,T = obj.track0,0,obj.track3
+local xnum = Pnum[1]
+local ynum = Pnum[2]
+local depth = obj.track1
+local randamp = obj.track2
+local alpha   = 1
+point=point or 0
+alpharand = alpharand*.01
+
+ wave = wave or {0,0,0}
+local w_amount = wave[1]*.01
+local w_time = obj.time * wave[2]
+local w_size = wave[3]*.01
+
+local t = {}
+
+for i = 0, xnum-1  do
+ t[i] = {}
+for j = 0, ynum-1 do
+  	local r_rand = rand(-1000,1000,seed+(i+1)*(j+5),i+j*21)*.001
+	if time>0 then
+	  time = math.sin(i+j)*r_rand*10 + time  
+	  r_rand = Shake(time,-1*(i+1),1*(i+1),seed+(i+1)*(j+5))/(1+i)
+	end
+ local a_rand  = (r_rand+1)*.5
+       a_rand  = (a_rand * alpharand ) + (1-alpharand)
+
+       r_rand  = r_rand * randamp
+
+ local r     = R + (R * .01 * r_rand)  + ( math.sin( j * w_size + w_time ) +0.5)/2 * R * w_amount
+ local phi   = 0 + toRad * P * j
+ local theta = (pi*2 / xnum*i) + toRad*(T) * j
+ local x,y,z = SPC(r ,phi ,theta)
+ 
+
+ if both==1 then
+   y = y + depth * ((ynum-1)/2 - j)  
+   y = y
+ else
+   y = y + depth * j
+   y = y
+ end
+
+ x,y,z = z,x,y 
+
+local fd = 1
+ 
+  local cam = obj.getoption("camera_param")
+  local len = math.sqrt((x+obj.x - cam.x)^2+(y+obj.y - cam.y)^2+( z+obj.z - cam.z)^2 )
+
+    if len > fade_dist then 
+      local dn = (len - fade_dist)	
+	--fd =  fd / (1 + dn * fade_spd * .00001 )
+	fd =  fd / math.exp(dn * (fade_spd * .00001))
+    end
+ 
+ t[i][j] = {x,y,z, a_rand, fd }
+
+if point>0 then
+	 obj.setoption("billboard",3)
+	 local COL = color
+	 if not string.find(tostring(color),"table:") then
+	   COL = {color} 
+	 end
+ 	 obj.load("figure","円",COL[(i+j)%(#COL) + 1],point)
+	 local x,y,z = ROT(x,y,z)
+ 	 obj.draw(x,y,z,1,1,-obj.rx,-obj.ry,-obj.rz)
+end
+
+end
+end
+
+ 
+table.insert(t,t[1])
+
+
+
+local DP2 = function(t,col,scale,fog,fogcolor,both)
+
+obj.setoption("billboard",0)
+local s = scale or 1 
+local mode = 0
+
+	if not string.find(tostring(col),"table:") then
+	    if fog==0 then
+	      obj.load("figure","四角形",col,1)
+	    else
+	      col = {col}
+	      mode = 1
+	    end
+	else
+	  mode = 1
+	end
+
+for i=0,#t ,1 do
+ for j=0,#t[i]-1 do 
+   if mode==1 then
+    obj.load("figure","四角形",col [(i+j)%(#col) + 1] ,1)
+  end
+ 
+	local ii =(i+1)%#t
+	local jj = j%#t[i]+1
+ 	local p0 = t[i ][j ]
+	local p1 = t[ii][j ]
+	local p2 = t[ii][jj]
+	local p3 = t[i ][jj]
+	if both==1 then
+        p0,p1,p2,p3 = p3,p2,p1,p0
+	end
+	local x0,y0,z0,a0,f0 = unpack(p0)
+	local x1,y1,z1,a1,f1 = unpack(p1)
+	local x2,y2,z2,a2,f2 = unpack(p2)
+	local x3,y3,z3,a3,f3 = unpack(p3)
+	
+	x0,y0,z0 = x0*s,y0*s,z0*s
+	x1,y1,z1 = x1*s,y1*s,z1*s
+	x2,y2,z2 = x2*s,y2*s,z2*s
+	x3,y3,z3 = x3*s,y3*s,z3*s
+
+ 	local alpA = math.max(0,math.min(a0*a1,1)) 
+	local alpB = math.max(0,math.min(a2*a3,1))	
+	local fA = f0 * f1
+	local fB = f2 * f3
+
+	 if fade==0 then
+ 	  fA,fB = 1,1 
+	 end
+
+	if fog==1 then
+	  obj.effect("単色化","輝度を保持する",0,"color",fogcolor,"強さ", 100 * (1- (f0 * f1* f2 * f3)) )
+	end
+
+	obj.drawpoly(x0,y0,z0,  x1,y1,z1, x2,y2,z2, x2,y2,z2, 0,0, 0,0, 0,0, 0,0, alpA * fA)
+	obj.drawpoly(x0,y0,z0,  x2,y2,z2, x3,y3,z3, x3,y3,z3, 0,0, 0,0, 0,0, 0,0, alpB * fB)
+  end
+end
+end
+
+--obj.setoption("antialias",0)
+if obj.check0 then
+ --for i=0,1 do
+  local scale = 1
+  DP2(t,color,scale,fog,fogcolor,both)
+ --end
+end

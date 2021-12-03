@@ -1,0 +1,253 @@
+--[[
+rikkyさんのdllを使用したシンプル且つ適当な音声波形です。
+rikky_module.audiobufferは拡張編集装備のものより分解能が高く便利です。
+http://www.nicovideo.jp/watch/sm28883720 からダウンロードできる
+rikky_module.dll の v0.5が必須です。
+rikky_module.dll は exedit.luaと同じ階層に置くと良いかも。
+
+
+typeは 1から順に pcm, spectrum, spectrum(RMS風の何か), decibelです。たぶん。
+
+averageは平均化範囲です。3以下推奨。 0は平均化なしです。(rmsは0だと働かないです)
+
+resolutionは分解能です。0から3まで。低い音を見たい場合は1以上で。
+
+freqは獲得周波数の下限と上限を指定します。
+Typeによっては値を変えないとうまく動かないかもしれません。
+
+BarWidthはバーの幅を変更します。0で消えます。
+
+仮想バッファを使用するとフィルターやアニメーション効果が使えるようになります。
+ただし重たくなります。
+
+
+]]
+
+--track0:divsize,1,1024,128,1
+--track1:width,1,12,3,1
+--track2:amp,0,500,100
+--track3:type,1,4,1,1
+--check0:mono,0
+--dialog:Average,av=1;Resolution,reso=1;freq,freq={0,14400};円形/chk,local cr=0;ｸﾞﾗﾃﾞ/chk,local grd=0;color/col,color=0xff0000;BarWidth%,local bw=50;仮想ﾊﾞｯﾌｧ/chk,local tmpb=1;
+
+local h_c,s_c,v_c = 0,100,100
+if color then
+    h_c,s_c,v_c = HSV(color)
+end
+
+
+if rikky_module == nil then
+	local CPATH = {}
+	local cpath = package.cpath .. ";"
+	while(1)do
+		n = cpath:find(";")
+		if n then
+			CPATH[#CPATH + 1] = cpath:sub(1, n - 1)
+			cpath = cpath:sub(n + 1, #cpath)
+		else
+			break
+		end
+	end
+	if not CPATH[2]:find("script\\?.dll") then
+		CPATH[3]=CPATH[2]:sub(1, CPATH[2]:find("\\script\\")) .. "script\\?.dll"
+		package.cpath = package.cpath .. ";" .. CPATH[3]
+	end
+	for i=1,#CPATH do
+		local f=io.open(CPATH[i]:gsub("?", "rikky_module"),"rb")
+		if f then
+			require("rikky_module")
+			f:close()
+			break
+		end
+	end
+end
+
+local size,w = obj.track0, obj.track1
+if (cr==1) then size=math.max(3,size) end
+bw=bw or 100
+bw=bw*.01
+local W=(w/2)*bw
+local amp=obj.track2*.01
+local Type=obj.track3
+
+if (tmpb==1) then
+  local tw,th=((w)*size)+((w)*size)%2,(100+amp*100)+(100+amp*100)%2
+  if Type==2 then th=th*1.5+(th*1.5)%2 end
+  if (cr==1) then
+    tw=(60+20*w+(amp*2.5)*10)*2
+    tw = (tw + tw%2)*2
+    if Type==2 then tw=tw*1.3+(tw*1.3)%2 end
+    th = tw
+  end
+  obj.setoption("drawtarget","tempbuffer",tw,th)
+  obj.setoption("blend","alpha_add")
+end
+
+local av = av or 0
+local T={"pcm", "spectrum","spectrum", "decibel"}
+local chennel = (obj.check0 and "monaural") or "stereo"
+local reso = reso or 1
+local freq = freq or {0,14400}
+local reso_max = 1024*(reso+1)
+local frm = rikky_module.getinfo("start_end") + (obj.time*obj.framerate)
+    local Add=function(v0,v1,rms)
+      local v={}
+      local rms=rms or 0
+      if (rms==3)then
+        for i=1,#v1 do
+          local va=v0[i] or 0
+          local vb=v1[i] or 0
+          v[i] = (va*va+vb*vb)^.5
+        end
+      else
+        for i=1,#v1 do
+          local va=v0[i] or 0
+          local vb=v1[i] or 0
+          v[i] = va+vb
+        end
+      end
+      return v
+    end
+
+    local Put=function(col,col2,a)
+      local col2=col2 or col
+      local c={col,col,col2,col2}
+      local n={{0,0},{1,0},{1,1},{0,1}}
+      for i=1,4 do
+        obj.putpixel(n[i][1],n[i][2],c[i],a or 1)
+      end
+    end
+
+local div=1
+local L,R={},{}
+if (av>0) then
+  div=1/(av*2+1)
+  for i=-av,av do
+
+    local l,r=rikky_module.audiobuffer(frm+i,T[Type],"absolute",chennel,size,reso,freq)
+    L=Add(L,l,Type)
+    if not r then
+      R=L
+    else
+      R=Add(R,r,Type)
+    end
+
+  end
+else
+  local l,r=rikky_module.audiobuffer(frm,T[Type],"absolute",chennel,size,reso,freq)
+  if not r then r=l end
+  L,R = l,r
+end
+
+
+local sin,cos,pi=math.sin,math.cos,math.pi
+local r = pi*2/size
+local p2 = pi/2
+local dl,dr=0,0
+local s=1+grd
+obj.load("figure","四角形",0xffffff,s)
+
+
+if Type==4 then
+
+  for i=1,size do
+    local x=i*w - size*w/2 -w/2
+    dl=(60+math.max(-60,L[i]*div))
+    dr=(obj.check0 and dl) or (60+math.max(-60,R[i]*div))
+    local colL=HSV(240-(dl/60)*260+h_c,s_c,v_c)
+    local colR=(obj.check0 and colL) or HSV(240-(dr/60)*260+h_c,s_c,v_c)
+    dl,dr = dl*amp,dr*amp
+    local yl,yr = dl,dr
+    if (cr==0) then
+        Put(colL,nil,1)
+        obj.draw(x,yl);obj.draw(x,yl*1.1)
+        obj.drawpoly(x-W, yl,0,x+W, yl,0, x+W,0,0,x-W,0,0,  0,0,s,0,s,s,0,s)
+        Put(colR,nil,1)
+        obj.draw(x,-yr);obj.draw(x,-yr*1.1)
+        obj.drawpoly(x-W,-yr,0,x+W,-yr,0, x+W,0,0,x-W,0,0,  0,0,s,0,s,s,0,s)
+    elseif (i>0) and (cr==1) then
+        local dl1=(60+math.max(-60,L[i%(size-0)+1]*div))
+        local dr1=(obj.check0 and dl1) or (60+math.max(-60,R[i%(size-0)+1]*div))
+        local colL0=HSV(240-(dl1/60)*260+h_c,s_c,v_c)
+        dl1,dr1 = dl1*amp,dr1*amp
+        Put(colL,colL0,1)
+        local rd=100+20*w
+        local z=0
+        local cx0,cy0=cos(r*(i-1)-p2)*(dl+rd),sin(r*(i-1)-p2)*(dl+rd)
+        local cx1,cy1=cos(r*i-p2)*(dl1+rd),sin(r*i-p2)*(dl1+rd)
+        obj.drawpoly(cx0,cy0,0, cx1,cy1,0, cx1*(1-bw),cy1*(1-bw),z, cx0*(1-bw),cy0*(1-bw),z,0, 0,0,s,0,s,s,0,s)
+        obj.draw(cx0*0.1,cy0*0.1);obj.draw(cx0*0.2,cy0*0.2)
+    end
+
+  end
+
+elseif Type==2 or Type==3 then
+
+  for i=1,size do
+    local x=i*w - size*w/2 - w/2
+    dl=(L[i]/85)*div
+    dr=(obj.check0 and dl) or (R[i]/85)*div
+    local colL=HSV(1/(1+dl*.1)*240+h_c, s_c, v_c)
+    local colR=(obj.check0 and colL) or HSV(1/(1+dr*.1)*240+h_c, s_c, v_c)
+    dl,dr = dl*amp,dr*amp
+    if (cr==0) then
+        Put(colL,colL,1)
+        obj.draw(x,dl)
+        obj.drawpoly(x-W, dl,0,x+W, dl,0, x+W,0,0,x-W,0,0, 0,0,s,0,s,s,0,s)
+
+        Put(colR,colR,1)
+        obj.draw(x,-dr)
+        obj.drawpoly(x-W,-dr,0,x+W,-dr,0, x+W,0,0,x-W,0,0, 0,0,s,0,s,s,0,s)
+    elseif (i>0) and (cr==1) then
+        local dl1=(L[i%(size-0)+1]/85)*div
+        local dr1=(obj.check0 and dl1) or (R[i%(size-0)+1]/85)*div
+        local colL0=HSV(1/(1+dl1*.1)*240+h_c, s_c, v_c)
+        dl1,dr1 = dl1*amp,dr1*amp
+        Put(colL,colL0,1)
+        local rd=100+20*w
+        local z=0
+        local cx0,cy0=cos(r*(i-1)-p2)*(dr+rd),sin(r*(i-1)-p2)*(dr+rd)
+        local cx1,cy1=cos(r*i-p2)*(dr1+rd),sin(r*i-p2)*(dr1+rd)
+        obj.drawpoly(cx0,cy0,0, cx1,cy1,0, cx1*(1-bw),cy1*(1-bw),z, cx0*(1-bw),cy0*(1-bw),z,0, 0,0,s,0,s,s,0,s)
+        obj.draw(cx0*0.1,cy0*0.1);obj.draw(cx0*0.2,cy0*0.2)
+    end
+  end
+
+else
+
+  for i=1,size do
+    local x=i*w - size*w/2 - w/2
+    dl=(L[i]/600)*div
+    dr=(obj.check0 and dl) or (R[i]/600)*div
+    local colL=HSV(1/(1+math.abs(dl)*.1)*240+h_c, s_c, v_c)
+    local colR=(obj.check0 and colL) or HSV(1/(1+math.abs(dr)*.1)*240+h_c, s_c, v_c)
+    dl,dr = dl*amp,dr*amp
+    local yl,yr = dl+50,-(dr+50)
+    if (cr==0) then
+        Put(colL,nil,1)
+        obj.draw(x,yl)
+        obj.drawpoly(x-W, yl,0,x+W, yl,0, x+W,50,0,x-W,50,0, 0,0,s,0,s,s,0,s)
+
+        Put(colR,nil,1)
+        obj.draw(x,yr)
+        obj.drawpoly(x-W, yr,0,x+W, yr,0, x+W,-50,0,x-W,-50,0, 0,0,s,0,s,s,0,s)
+    elseif (i>0) and (cr==1) then
+        local dl1=(L[i%(size-0)+1]/600)*div
+        local dr1=(obj.check0 and dl1) or (R[i%(size-0)+1]/600)*div
+        local colL0=HSV(1/(1+math.abs(dl1)*.1)*240+h_c, s_c, v_c)
+        dl1,dr1 = dl1*amp,dr1*amp
+        Put(colL,colL0,1)
+        local rd=100+20*w
+        local z=0
+        local cx0,cy0=cos(r*(i-1)-p2)*(dr+rd),sin(r*(i-1)-p2)*(dr+rd)
+        local cx1,cy1=cos(r*i-p2)*(dr1+rd),sin(r*i-p2)*(dr1+rd)
+        obj.drawpoly(cx0,cy0,0, cx1,cy1,0, cx1*(1-bw),cy1*(1-bw),z, cx0*(1-bw),cy0*(1-bw),z,0, 0,0,s,0,s,s,0,s)
+        obj.draw(cx0*0.1,cy0*0.1);obj.draw(cx0*0.2,cy0*0.2)
+    end
+
+  end
+end
+
+if (tmpb==1)then
+  obj.load("tempbuffer")
+end

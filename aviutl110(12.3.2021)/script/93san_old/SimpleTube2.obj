@@ -1,0 +1,332 @@
+--[[
+
+チューブ状のオブジェクトを作ります。
+
+
+トラックバー
+
+	Radius  : 筒半径
+	Depth   : 筒長さ / リングサイズ
+	Random  : ランダム変化
+	Twist   : ねじり
+	トーラス: チューブ/トーラスの選択
+
+ダイアログ
+
+	◆分割
+		縦横分割数 (少なければ三角形など)
+
+	◆位置のオフセット
+		筒の基準位置を%指定で前後します(トーラスは無関係)
+
+	◆色
+		色はテーブル使用すると複数使えます。　{0xffffff,0xff1244,0xccfa13} など
+
+	◆色パターン
+		色が複数あった場合塗り分けパターンを選びます。
+		0=最初の色のみ, 1=円周, 2=奥行, 3=ポリゴン順,4=ランダム
+	 	小数点以下があると次のパターンと混ざります。
+
+	◆fog強度
+		カメラから奥に行くほど色が付きます。
+
+	◆Fog[始/終]
+		色が変化しはじめる位置、変化が始まってから完了するまでの範囲を指定します。
+
+	◆Fogcolor
+		背景と近似色にすると霧のような表現を作れます。
+	 	※最新版の「偽被写界深度2c」を使用している場合、「fog強度をマイナス」にすると偽被写界深度2のパラメータを使用します。(強度以外は上書き)
+	 	また偽被写界深度2cの近距離設定も使用できます。
+
+	◆ﾗﾝﾀﾞﾑ[種/間]
+		ランダム変化のシードと変化間隔を指定します。変化間隔は値が大きいほどゆっくり動作します。※0で止まります
+		シードは色パターンのランダムにも使用されます。
+
+	◆wave[強/数/速]
+		サイン波で半径を変化させます。 強度(pixel)、発生数、周期速度です。
+		 第四引数に文字列で "x","y","z","r" で影響を与えるパラメータを選べます。デフォルトは"r"
+ 		"xyzr" などと混ぜるとそれぞれに影響します。大文字だと元の値に乗算したものを加算します。
+
+	◆wave(sub)
+		上に同じ。二つ目を作ります。
+
+
+]]
+
+
+
+--track0:Radius,0,2000,300
+--track1:Depth,-12000,12000,1000
+--track2:Random,-300,300,0
+--track3:Twist,-1800,1800,0
+--check0:トーラス,0
+--dialog:分割,dn={16,16};位置のoffset,o_t=0;色[ﾃｰﾌﾞﾙ可]/col,c_l=0xccb134;色ﾊﾟﾀｰﾝ[0-4],p_t=1;Fog強度%,f_g=0;Fog[始/終],f_t={400,3500};FogColor/col,f_l=0xffffff;ﾗﾝﾀﾞﾑ[種/間],rdss={0,500};wave[強/数/速],w_e={0,3,1};wave(sub),s_e={0,0,0};
+
+local put,opt = obj.putpixel,obj.pixeloption
+
+local f = {
+  --カメラ深度エフェクト
+  Depthfx = function(
+  	pos,        -- オブジェクト座標{x,y,z}
+  	focalpoint, -- 焦点の前後
+	startfade,  -- 値が変化し始める位置
+  	vanish,     -- 値が変化し終える位置
+  	near_startfade, -- 値が変化し始める位置(焦点より手前)
+	near_vanish,    -- 値が変化し終える位置(焦点より手前)
+	focusmode -- 1で焦点を目標点に固定
+  	)
+  	pos = pos or {obj.x+obj.ox,obj.y+obj.oy,obj.z+obj.oz}
+  	focalpoint,startfade,vanish = focalpoint or 0,startfade or 100,vanish or 2500
+  	near_startfade,near_vanish = near_startfade or startfade,near_vanish or vanish
+  	local mul=function(v,s) return {v[1]*s,v[2]*s,v[3]*s} end
+  	local dot=function(a,b) return (a[1]*b[1]+a[2]*b[2]+a[3]*b[3]) end
+  	local c = obj.getoption("camera_param")
+  	local e = {c.tx-c.x,c.ty-c.y,c.tz-c.z}
+  	local d = (e[1]*e[1]+e[2]*e[2]+e[3]*e[3])^.5
+  	local n = mul(e,1/d)
+  	local pd = (focusmode) and (d+focalpoint) or (1024+focalpoint)
+  	local pl = mul(n,pd)
+  	local pv = {pos[1]-c.x, pos[2]-c.y, pos[3]-c.z}
+  	local depth = dot({pv[1]-pl[1],pv[2]-pl[2],pv[3]-pl[3]},n)
+  	if depth<0 then startfade,vanish = near_startfade,near_vanish end
+  	local D = math.abs(depth)-startfade
+  	D = D<0 and 0 or D
+  	D = D>vanish and vanish or D
+  	D = (1-D/vanish)
+  	return D,depth,n,pd
+  end,
+
+  --変化間隔付きランダム
+  Shake = function(interval,min,max,seed,frm)
+      if not min then min,max,seed=-1,1,0 end
+        frm = frm or obj.frame
+        local min,max=min*1000,max*1000
+        local t = obj.time*100/interval
+        local p = math.floor(t)
+        t = t-p
+        local pl={}
+        pl[1]=t
+        for i=0,3*4-1 do
+          local s = seed--+math.floor(i/4)
+          pl[i+2]=rand(min,max,s,p+math.floor(i/4)+frm)*.001
+        end
+        return obj.interpolation(unpack(pl))
+  end,
+
+  --色交換
+  Ccol = function(t,col0,col1)
+      t = math.max(0,math.min(1,t))
+      local r0,g0,b0 = RGB(col0)
+      local r1,g1,b1 = RGB(col1)
+      return RGB( r0*(1-t)+r1*t , g0*(1-t)+g1*t, b0*(1-t)+b1*t )
+  end,
+
+  --リニア変換
+  Linear = function(t, t1, t2, v1, v2, nolimit )
+     v1 = v1 or 0
+     v2 = v2 or 1
+     local c = (t2 - t1)
+     local n = t/c - t1/c
+     local V = v2-v1
+           V = V * n + v1
+      if (nolimit==1) then
+         return V
+      else
+       if (v1>v2) then v1,v2=v2,v1 end
+         V = math.max(v1,math.min(v2,V))
+         return V
+      end
+  end,
+
+  Switch = function(t,a,b)
+      return (a*(1-t)+b*t)
+  end,
+
+    --回転行列、ｖに座標{x,y,z},rに回転軸{rx,ry,rz}。
+  Rotv = function(v,r)
+       v = v or {0,0,-1}
+       r = r or {obj.rx,obj.ry,obj.rz}
+      local tR = math.pi/180
+      local cos,sin=math.cos,math.sin
+      local rx,ry,rz = r[1]*tR, r[2]*tR, r[3]*tR
+      local x,y,z = v[1],v[2],v[3]
+      local x0=x*cos(rz)-y*sin(rz)
+      local y0=x*sin(rz)+y*cos(rz)
+      local z0=z*cos(ry)-x0*sin(ry)
+      return {z*sin(ry)+x0*cos(ry),y0*cos(rx)-z0*sin(rx),y0*sin(rx)+z0*cos(rx)}
+  end,
+
+  Lensq = function(a,b)
+    local x,y,z=(a[1]-b[1]),(a[2]-b[2]),(a[3]-b[3])
+    return (x*x + y*y + z*z)
+  end,
+
+    --トーラス
+  Torus = function(
+      R,--大半径
+      r,--小半径
+      p,-- 0~2π
+      t -- 0~2π
+      )
+      local x = R*math.cos(t) + r*math.cos(p)*math.cos(t)
+      local y = R*math.sin(t) + r*math.cos(p)*math.sin(t)
+      local z = r*math.sin(p)
+    return x,y,z
+  end
+}
+
+dn = dn or {16,16}
+local col   = c_l or {0xccb134}
+local fcol  = f_l or 0xffffff
+local pat   = p_t or 1
+local fog   = f_g or 0
+local fogst = f_t or {1000,5000}
+local wave  = w_e or {0,.5,1}
+local subwave = s_e or {0,0,0}
+local offset = o_t or 0
+
+local wave_d = wave[4] or "r"
+local sub_d  = subwave[4] or "r"
+local seed,randspd = rdss[1], rdss[2]
+local n,zn = dn[1],dn[2]
+local near_fcol = fcol
+local pat,pat_t = math.modf(pat)
+fog = math.abs(fog)*.01
+offset = 1 - offset*.01
+local focal,fogstart,fogend,unear = 0,fogst[1],fogst[2],0
+
+if (fogstart<0) then 
+	focal=fogstart 
+	fogstart=0
+end
+
+if DepthParam and (f_g<0) then
+  focal,fogstart,fogend,near_fogstart,near_fogend,unear,fcol,near_fcol = unpack(DepthParam)
+end
+
+dn  = nil
+c_o = nil
+f_l = nil
+p_t = nil
+f_g = nil
+f_t = nil
+w_e = nil
+s_e = nil
+
+randspd = randspd*.01
+if not tostring(col):find("table:") then col={col} end
+local radius = obj.track0
+local zd = obj.track1
+local rand_am = obj.track2*.01
+local pi2 = math.pi*2
+local phi = math.pi*2/n
+local t = math.pi/90*obj.track3
+
+obj.load("figure","円",0xffffff,20)
+local T={}
+local frm = 0
+local x,y,z
+for i=0,n-1 do
+  T[i+1]={}
+  for j=0,zn do
+    frm = frm+1
+    local sinwave = math.sin((math.pi*2)/zn*j * wave[2] + obj.time*wave[3]) * wave[1]
+    local sinsub = math.sin((math.pi*2)/zn*j* (subwave[2] or wave[2] ) + obj.time*(subwave[3] or wave[3])) * subwave[1]
+    local itv = rand(10,150,i,frm) * randspd
+    local rd = f.Shake(itv,0,100,frm,frm)*.01 * rand_am
+    local r = radius + radius*rd
+    if wave_d:find("r") then r = r + sinwave end
+    if wave_d:find("R") then r = r+r * sinwave*.01 end
+    if sub_d:find("r") then r = r + sinsub end
+    if sub_d:find("R") then r = r+r*sinsub*.01 end
+
+    if (obj.check0) then
+      x,y,z = f.Torus(zd*.5,r,phi*i + t*j/zn ,math.pi*2/zn*j)
+    else
+     x = r * math.cos(phi*i + t*j/zn - math.pi/2)
+     y = r * math.sin(phi*i + t*j/zn - math.pi/2)
+     z = (j*(zd/zn)) - (zd/2 * offset)
+    end
+
+    if wave_d:find("X") then x = x+x * sinwave*.01 end
+    if wave_d:find("Y") then y = y+y * sinwave*.01 end
+    if wave_d:find("Z") then z = z+z * sinwave*.01 end
+    if wave_d:find("x") then x = x + sinwave end
+    if wave_d:find("y") then y = y + sinwave end
+    if wave_d:find("z") then z = z + sinwave end
+    if sub_d:find("X") then x = x+x * sinsub*.01  end
+    if sub_d:find("Y") then y = y+y * sinsub*.01  end
+    if sub_d:find("Z") then z = z+z * sinsub*.01  end
+    if sub_d:find("x") then x = x + sinsub end
+    if sub_d:find("y") then y = y + sinsub end
+    if sub_d:find("z") then z = z + sinsub end
+
+    local pr = f.Rotv({x,y,z})
+    local d,dp = f.Depthfx(
+    {pr[1]+obj.x,pr[2]+obj.y,pr[3]+obj.z},
+    focal,fogstart or 300,fogend or zd,
+    near_fogstart,near_fogend
+    )
+    if (unear==0) then
+      if dp<0 then d=1 end
+    end
+    T[i+1][j+1]={x,y,z,1-d,dp}
+    if (obj.check0) and (j==zn) then
+      --ループ
+      T[i+1][j+1] = T[i+1][1]
+    end
+    -- obj.load(i.." / "..j)
+    --obj.draw(pr[1],pr[2],pr[3],.5,d)
+  end
+end
+
+table.insert(T,T[1])
+
+frm = 0
+for i=1,n do
+  for j=1,zn do
+    frm = frm+1
+    local t0,t1,t2,t3 = T[i][j], T[i][j+1], T[i+1][j+1], T[i+1][j]
+    local x0,y0,z0,d0,dp0 = t0[1],t0[2],t0[3],t0[4],t0[5]
+    local x1,y1,z1,d1,dp1 = t1[1],t1[2],t1[3],t1[4],t1[5]
+    local x2,y2,z2,d2,dp2 = t2[1],t2[2],t2[3],t2[4],t2[5]
+    local x3,y3,z3,d3,dp3 = t3[1],t3[2],t3[3],t3[4],t3[5]
+    local dA = (d0+d1+d2)/3 --math.max(d0,d1,d2)
+    local dB = (d0+d2+d3)/3 --math.max(d0,d2,d3)
+    local dpA = (dp0+dp1+dp2)/3
+    local dpB = (dp0+dp2+dp3)/3
+
+    local patT = {[0]=1, (i-1)%(#col)+1, (j-1)%(#col)+1, frm%(#col)+1,rand(1,#col,seed or 0,frm) }
+    local pt = patT[pat%5]
+    local pt2= patT[(pat+1)%5]
+    local col_n = f.Ccol(pat_t, col[pt], col[pt2])
+    local fcol_a = fcol
+    if (unear==1) and (dpA<0) then fcol_a=near_fcol end
+    local col0 = f.Ccol(dA*fog,col_n,fcol_a)
+    obj.load("figure","四角形",col0,1)
+
+    -- local l = math.max(f.Lensq(t0,t1),f.Lensq(t1,t2),f.Lensq(t2,t0))
+    --       l = math.sqrt(l)
+    -- local alpha = f.Linear(l,1500,3500,1,0)
+    local alpha = 1
+    obj.drawpoly(x0,y0,z0,x1,y1,z1,x2,y2,z2,x2,y2,z2,0,0, 0,1, 1,1, 1,1,alpha)
+
+    local patT2 = patT
+      frm = frm+1
+      patT2[3] = frm%(#col)+1
+      patT2[4] = rand(1,#col,seed or 0,frm)
+    pt = patT2[pat%5]
+    pt2= patT2[(pat+1)%5]
+    col_n = f.Ccol(pat_t, col[pt], col[pt2])
+    local fcol_b = fcol
+    if (unear==1) and (dpB<0) then fcol_b = near_fcol end
+    local col1 = f.Ccol(dB*fog,col_n,fcol_b)
+    put(0,0,col1,1)
+
+    -- l = math.max(f.Lensq(t0,t2),f.Lensq(t2,t3),f.Lensq(t3,t0))
+    -- l = math.sqrt(l)
+    -- alpha = f.Linear(l,1500,3500,1,0)
+    alpha = 1
+    obj.drawpoly(x0,y0,z0,x2,y2,z2,x3,y3,z3,x3,y3,z3,0,0, 1,1, 1,0, 1,0,alpha )
+  end
+end

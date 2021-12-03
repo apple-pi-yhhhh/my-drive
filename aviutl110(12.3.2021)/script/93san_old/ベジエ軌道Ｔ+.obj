@@ -1,0 +1,174 @@
+--track0:軌道番号,1,100,1,1
+--track1:軌道指定,0,3,0,1
+--track2:ｸﾞﾗﾌｻｲｽﾞ,50,1000,200,1
+--dialog:アンカー,pos={-50,50,50,-50};info/chk,local info=0
+--check0:グラフ表示,1;
+
+
+--[[
+  ティムさんのオリジナルと内容は全く同じものです。上書きして使います。グラフ表示にハンドルを付けました。
+  ベジエ軌道Ｔを導入していない方は此方のスクリプト(ベジエ軌道Ｔ.tra)が必要です。
+  http://www.nicovideo.jp/watch/sm20632293
+
+infoにチェックしたときに出てくる値は
+(簡単に複雑で滑らかなアニメーションができるスクリプト)
+http://www.nicovideo.jp/watch/sm25752179
+で利用…出来るかもしれません。未検証
+]]
+
+local Orbit=function(t,x1,y1,x2,y2)
+	local s=1-t
+	x1=(3*s*s*x1+(3*s*x2+t)*t)*t
+	y1=(3*s*s*y1+(3*s*y2+t)*t)*t
+	return x1,y1
+end
+
+if OrbitNumber==nil then
+	OrbitNumber={}
+end
+pos=pos or {-50,50,50,-50}
+local n=obj.track0
+local S=obj.track2
+local Sh=S*0.5
+local gv=obj.getvalue
+local P1x,P1y,P2x,P2y
+
+
+if #pos==2 then
+  P1x,P1y=gv("layer"..pos[1]..".x"),gv("layer"..pos[1]..".y")
+  P2x,P2y=gv("layer"..pos[2]..".x"),gv("layer"..pos[2]..".y")
+ pos={P1x,P1y,P2x,P2y}
+ else
+ obj.setanchor("pos",2)
+ P1x,P1y,P2x,P2y=unpack(pos)
+end
+
+
+if P1x<-Sh then P1x=-Sh elseif P1x>Sh then P1x=Sh end
+if P2x<-Sh then P2x=-Sh elseif P2x>Sh then P2x=Sh end
+local q1x,q1y,q2x,q2y=(P1x+Sh)/S,(-P1y+Sh)/S,(P2x+Sh)/S,(-P2y+Sh)/S
+OrbitNumber[n]={q1x,q1y,q2x,q2y,obj.track1}
+
+local temph=math.max(math.abs(pos[2]),math.abs(pos[4]),S)*2-20
+if obj.check0 then
+	obj.setoption("drawtarget","tempbuffer" ,S+20,S+temph)
+
+	local N=obj.getoption("section_num")
+	TM={}
+	for i=0,N-1 do
+		TM[i]=obj.getvalue("time",0,i)
+	end
+	TM[N]=obj.getvalue("time",0,-1)
+	local ot=obj.time
+
+	local z=1
+	if ot<obj.totaltime then
+		local i=1
+		while TM[i]<=ot do
+			i=i+1
+		end
+		i=i-1
+		z=(ot-TM[i])/(TM[i+1]-TM[i])
+	end
+
+	local t1=0
+	local t2=1
+
+	for i=1,10 do
+		local tm=(t1+t2)*0.5
+		local xm,y=Orbit(tm,q1x,q1y,q2x,q2y)
+		if z<xm then
+			t2=tm
+		else
+			t1=tm
+		end 
+	end
+
+
+
+
+
+        
+	local x,y=Orbit((t1+t2)*0.5,q1x,q1y,q2x,q2y)
+       
+	x=  x*S-Sh
+	y=-(y*S-Sh)
+     
+       
+
+	obj.load("figure","四角形",0x231d1e,S)
+	obj.draw(0,0,0,1,0.5)
+	obj.load("figure","四角形",0xd7d3d4,S,1)
+	obj.draw()
+	obj.load("figure","円",0xf0f0f0,8)
+
+      
+
+	for t=0,1,1/150 do
+		local x,y=Orbit(t,q1x,q1y,q2x,q2y,Cor)
+		x=  x*S-Sh
+		y=-(y*S-Sh)
+		obj.draw(x,y,0, 1/2,1)
+	end
+       
+        obj.load("figure","四角形",0xffffff,1)
+        obj.effect("領域拡張","塗りつぶし",1,"右",((S*S)*2)^0.5)
+        obj.draw(0,0,0, 1,0.2, 0,0,-45)
+
+
+        obj.load("figure","四角形",0xff471c,1) --0xd7d3d4
+        local length=((-S/2-P1x)^2+(S/2-P1y)^2)^0.5
+        local rot=math.deg(math.atan2(S/2-P1y,-S/2-P1x))
+        obj.effect("領域拡張","塗りつぶし",1,"右",length*2)
+        obj.effect("斜めクリッピング","角度",-90)
+        obj.draw(-S/2,S/2,0, 1,0.7, 0,0,rot)
+
+        obj.load("figure","四角形",0xff471c,1) --0xd7d3d4
+        local length=((S/2-P2x)^2+(-S/2-P2y)^2)^0.5
+        local rot=math.deg(math.atan2(-S/2-P2y,S/2-P2x))
+        obj.effect("領域拡張","塗りつぶし",1,"右",length*2)
+        obj.effect("斜めクリッピング","角度",-90)
+        obj.draw(S/2,-S/2,0, 1,0.7, 0,0,rot)
+
+
+
+
+        obj.load("figure","円",0xffffff,20)
+        obj.effect("縁取り","サイズ",1,"color",0x231d1e)
+        obj.draw(S/2,-S/2,0,0.6,1)
+        obj.draw(-S/2,S/2,0,0.6,1)
+
+	obj.setfont("ZonaPro",46,4,0xd7d3d4,0x231d1e)
+        obj.load(obj.track0)
+        obj.draw(0,0,0,0.8,0.8)
+
+
+        obj.load("figure","円",0xff471c,20)
+        obj.effect("縁取り","サイズ",1,"color",0xffffff)
+	obj.draw(x,y,0,0.5,1)
+
+	obj.load("figure","円",0xff0088,20)
+        obj.effect("縁取り","サイズ",1,"color",0xffffff)
+	obj.draw(P1x,P1y,0 ,0.8)
+        obj.load("figure","円",0x00aabb,20)
+        obj.effect("縁取り","サイズ",1,"color",0xffffff)
+        obj.draw(P2x,P2y,0 ,0.8)
+
+
+if Tbezier==nil then Tbezier={} end
+Tbezier["P1_"..obj.track0]=string.format("%.3f,%.3f",OrbitNumber[n][1],OrbitNumber[n][2])
+Tbezier["P2_"..obj.track0]=string.format("%.3f,%.3f",OrbitNumber[n][3],OrbitNumber[n][4])
+
+if info==1 then
+        obj.load("figure","四角形",0xd7d3d4,190,1000,-0.5)
+        obj.draw(0,0,0,1,0.6)
+
+	obj.setfont("メイリオ",26,4,0xffffff,0x231d1e)
+        obj.load(string.format(  "P1=%.3f ,%.3f",OrbitNumber[n][1],OrbitNumber[n][2])..
+                 string.format("\nP2=%.3f ,%.3f",OrbitNumber[n][3],OrbitNumber[n][4])
+                 )
+        obj.draw(0,0,0,0.8,1)
+end
+	
+        obj.load("tempbuffer")
+end

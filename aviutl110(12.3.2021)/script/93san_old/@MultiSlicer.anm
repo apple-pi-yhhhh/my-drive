@@ -1,0 +1,428 @@
+
+--[[
+  
+ 自由方向に沢山スライスします。
+ Angleで角度を指定し、Offsetで移動します。
+ 個別オブジェクトでも動作しますが仮想バッファオプションは無効化されます。
+ 
+ 幅の計算があまり正確ではありませんのでなんだか隙間ができます。
+ 幅拡張で上手く弄ってください。drawpoly?何のことでしょうか。
+ 交互動作にチェックを入れるとスライスごとに反転して移動します。
+ X軸、Y軸を回転に補正が入りませんので三次元的に回転させたい場合は
+ 仮想バッファや グループ制御、カメラ等を使って下さい。
+
+
+
+ダイアログ設定
+
+・ 幅ランダムはスライス幅をランダムにします。
+
+・ 移動範囲でオフセットの最大移動距離を指定します。
+
+・ 傾向はランダムの移動方向に偏りを持たせます。100だとに片方にのみ移動します。
+ 
+・ Easingは 正の値で Easein、負で Easeoutを使います。( easing.lua が必要です )
+   >>  "" で囲って文字列にすると 正の値でEaseinOut,負の値でEaseoutIN。
+ 
+・ カラーはオフセットに応じて色が付きます。強度は移動距離と共有のランダムです。 
+   交互動作チェック時はoffsetが100で最大強度になります。
+   >> あえて強度を100以上にするのもありです。
+   >> テーブル入力で順番に色が呼び出されます。 {0xf4d212, 0xd6535d, 0xf0af6d, 0xa5a69b} など。
+ 
+・ 色ずれはカラーと大体同じ。(いらない感)
+ 
+・ ローテーションにチェックを入れるとオブジェクトのZ軸を回転させた場合、元のオブジェクトだけが回転します。
+   >> 仮想バッファ時はよくわからないことになります。
+ 
+・ Angle(option) はスクリプトで操作したい場合の角度の追加入力欄です。
+    >> あまり長い記述をするとエラーになります。
+    >> 隠し機能として "1" と文字列で入力した場合は指定したレイヤー方向に向きます。
+    >> 個別オブジェクト時に "center" と入れるとオブジェクトの中央を向きます。
+  
+・ Seedは乱数のシード値を変えます。
+    >> マイナスの値ならばレイヤーを移動しても乱数が変化しないので複数重ねたりして使う場合に便利。
+    >> 個別オブジェクト使用時には obj.index 等とするとオブジェクト毎に違うシードに。
+
+
+追加オプション  Slicer-Option
+ 
+・ 本体の上に設置してください。 
+・ トラックバーは内部の斜めクリッピングの中心点をずらします。
+・ 描画位置ずれ にチェックを入れると中心点ではなく描画する座標をランダムにずらします。
+・ Z項目は描画する座標をランダムにずらします。
+・ offset(option)は本体のoffsetをスクリプトで操作するための追加入力欄です。本体のオフセットに倍率を掛ける形で動作します。
+    >> "4" と文字列で入力すると指定レイヤーとの距離で動作します。一応マイナスも受け入れます。"-6" など。
+・ 仮想バッファ全画面にチェックをすると強制的に全画面に描画します。 この設定は本体の設定より優先されます。
+    >> エッジ抽出などを使いたい場合に便利？
+    >> Z軸を回転させると徐々にずれていきます。Y軸,X軸回転には対応しません。
+
+
+
+ 初版から更新部分  
+
+ 2015/08/09
+ > Z軸回転のミスを修正
+
+ 2015/07/20
+ > 追加スクリプトを Slicer-Optionに名称変更
+ > 仮想バッファのオプションを追加
+ > ぼかしを指定出来るようにした
+ 
+ 2015/07/19
+ > 試しにオプションを追加
+ > スライス数を100に増加
+ > 仮想バッファは単純なものに変更
+
+ 2015/07/17 
+ > イージングを変えた。
+ 
+ 2015/07/15
+ > あまり意味は有りませんが仮想バッファ使用オプション追加、非常に適当な出来…(個別オブジェクトには使用できません。)
+ > アングルを逆回転に。
+ > 幅ランダムのスライス数を修正、ランダム振れ幅をやや派手に。
+ > 傾向の数値を修正。
+ > カラーに複数の色を指定出来るように。 
+ 
+]]
+
+--------------------------
+@Slice-Option
+--------------------------
+--track0:中心X,-4000,4000,0
+--track1:中心Y,-4000,4000,0
+--track2:Z(rand),-4000,4000,0
+--check0:描画位置をずらす,0
+--dialog:X-ランダム/chk,local randX=0; Y-ランダム/chk,local randY=0;Offset % (option),local offset=100;境界ぼかし,local blur=0;仮想ﾊﾞｯﾌｧ全画面/chk,local Temp=0;
+
+MSE = {}
+
+
+
+if tostring(offset)== offset then
+     local repl=0
+    if string.find(offset,"%p") then
+        offset,repl = string.gsub(offset,"%p","")
+    end
+  
+    if not obj.getvalue("layer"..offset..".x") then
+     offset=100
+    else
+     local screen = math.min(obj.screen_w,obj.screen_h)
+     offset = math.sqrt( (obj.getvalue("layer"..offset..".x")-obj.x-obj.ox)^2 + ( obj.getvalue("layer"..offset..".y") -obj.y-obj.oy)^2 )
+     offset = offset/screen * 100
+   if repl>0 then offset = 100-offset end
+    end
+ 
+ end
+
+offset = offset or 100
+
+MSE["x"] = obj.track0
+MSE["y"] = obj.track1
+MSE["z"] = obj.track2
+
+MSE["offset"] = math.max(0,offset/100)
+MSE["blur"] = blur or 0
+MSE["temp"] = Temp
+
+
+if randX==1 then  MSE["randX"]  = 1 end 
+if randY==1 then  MSE["randY"]  = 1 end 
+if obj.check0 then  MSE["pos"] = 1 end
+
+
+--------------------------
+@Multi-Slicer
+--------------------------
+--track0:Angle,-360,360,45
+--track1:Offset,-100,100,0
+--track2:Slices,2,100,18,1
+--track3:幅拡張,-120,300,0
+--check0:交互動作,0
+--dialog:幅ランダム/chk,local randslices=1; フェード/chk,local fade=0;移動範囲,local offsetrange=1000;傾向[-100/100],local rmm=0;Easing[1/7],local e_type=0;カラー/col,local col=0xff1212;カラー強度,local AMcol=100;色ずれ[幅/ﾀｲﾌﾟ],local Chroma={0,4};ローテーション/chk,local ROT=0;Angle(option),local ang2=0;Seed,local seed=777;仮想ﾊﾞｯﾌｧ(簡易)/chk,local LoadTemp=0;
+
+local num = obj.track2 --スライス数
+local angle = -obj.track0
+local randmin,randmax = math.max(-100, -100 + (-100*rmm/100) )  , math.min(100, 100 - (100*rmm/100) )
+local offset = obj.track1
+local offsetrange = offsetrange/100
+if obj.check0 then offsetrange = offsetrange/2 end
+local expansion = obj.track3/100
+local R = obj.getvalue("rz")
+e_type = e_type or 0
+ang2 = ang2 or 0
+
+
+  
+  if string.lower(ang2)=="center" then 
+  ang2 = math.deg(math.atan2(-obj.oy,-obj.ox))
+  elseif tostring(ang2)==ang2 then
+   if not obj.getvalue("layer"..ang2..".x") then ang2 = 0
+  else
+   ang2 = -math.deg( math.atan2(obj.getvalue("layer"..ang2..".y")-obj.y-obj.oy, obj.getvalue("layer"..ang2..".x")-obj.x-obj.ox ) )
+  end
+  end
+  
+  angle = angle + ang2
+
+if not string.find(tostring(col),"table:") then
+ col = {col} 
+end
+
+if not string.find(tostring(Chroma),"table:") then
+ Chroma = {Chroma,4} 
+end
+
+if MSE~=nil then 
+ if(MSE.temp==1)then LoadTemp=1 end
+end
+
+if obj.getoption("multi_object")  then LoadTemp=0 end  --個別オブジェクト時は仮想バッファを使用しない (スクリーンサイズで描画するので)
+if LoadTemp==0 and (offset~=0 or expansion~=0) then obj.effect() end  -- 仮想バッファ使用時は二度掛けにならないようにする
+local w,h=obj.getpixel()
+      w = math.sqrt(w^2+h^2)
+
+if ROT==1 then angle = angle + obj.getvalue("rz") end
+ 
+ obj.copybuffer("cache:org","obj")
+
+----------------------Ease (easing.luaが無ければスルー...出来ていなかったようで…)
+if e_type~=0 then
+ if require("easing") then 
+
+
+  local E = require("easing")
+  local t,c = offset,100
+  if(offset<0)then t,c=-t,-c end
+  local E_in  = {E.inSine,    E.inCubic,    E.inQuint,    E.inQuart,    E.inExpo,    E.inBack,    E.inBounce}
+  local E_out = {E.outSine,   E.outCubic,   E.outQuint,   E.outQuart,   E.outExpo,   E.outBack,   E.outBounce}
+  local E_io  = {E.inOutSine, E.inOutCubic, E.inOutQuint, E.inOutQuart, E.inOutExpo, E.inOutBack, E.inOutBounce}
+  local E_oi  = {E.outInSine, E.outInCubic, E.outInQuint, E.outInQuart, E.outInExpo, E.outInBack, E.outInBounce}
+
+ if tostring(e_type)==e_type then
+   e_type = tonumber(e_type)
+    if e_type>0 then
+     offset = E_io[e_type](t,0,c,100)
+    else
+     offset = E_oi[-e_type](t,0,c,100)
+    end
+ else
+   if e_type>0 then
+    offset = E_in[e_type](t,0,c,100)
+   else
+    offset = E_out[-e_type](t,0,c,100)
+   end
+ end
+
+ end
+end
+-------------------
+
+local progress = math.abs(offset/100)
+
+
+local ZOOM = 1
+local X,Y,Z,RZ = 0,0,0,0
+local blur = 0
+local temptype = 0
+
+------------------Tempbuffer
+
+if LoadTemp==1 then
+ X,Y,RZ   = 0,0,obj.getvalue("rz")
+ 
+ obj.setoption("drawtarget","tempbuffer",obj.screen_w,obj.screen_h)
+ obj.setoption("blend","alpha_add")
+end
+-----------------
+
+--////////////////////////////--
+if offset~=0 or expansion~=0 or MSE~=nil then 
+
+if randslices==1 then
+
+local n ={}
+local W = w
+  for i=1,(num-1) do
+    local ww = rand( w/num * 2, w/num * 0.02 ,seed ,i)
+    ww = math.max(2,ww)
+    n[i] = ww
+    W = W - ww
+    W = math.max(2,W)
+  end
+ 
+ n[num] = W
+
+ local D = 0
+  for k,v in pairs(n) do
+       obj.copybuffer("obj","cache:org")
+     
+     D = D + v
+     local W = -w/2 + D - v/2
+     local x =  math.cos(math.rad(angle-90))*W
+     local y = -math.sin(math.rad(angle-90))*W
+     local RND = rand(randmin,randmax ,seed,k)/100 * offset
+     local MX,MY = 0, 0
+
+----------------- 追加オプション
+if MSE~=nil then
+
+  local rnd = rand(-1000,1000 ,seed,k)/1000
+ if(MSE.pos==1)then
+    MX = rnd * MSE.x
+    MY = rnd * MSE.y
+ else
+    if(MSE.randX==1)then
+      x = x + MSE.x * rnd 
+    else 
+      x = x + MSE.x
+    end
+  
+   if(MSE.randY==1)then 
+      y = y + MSE.y * rnd
+   else 
+     y = y + MSE.y
+   end
+  
+ end
+  
+  Z = rnd * MSE.z
+  offset = offset * MSE.offset
+  progress = progress * math.min(1,math.max(MSE.offset,0))
+  blur = MSE.blur
+  temptype = MSE.temp
+  if(LoadTemp==1 and temptype==1)then X,Y,ZOOM,RZ = obj.x,obj.y,obj.getvalue("zoom")/100, obj.getvalue("rz") end 
+
+end
+
+-----------------
+
+     obj.effect("斜めクリッピング","幅",math.max(1,v + 4 + expansion*(v+4)) ,"角度", -angle ,"中心X",x,"中心Y",y,"ぼかし",blur)
+  
+
+   if obj.check0 then
+     RND = (k%2-0.5)*2 * offset
+   end
+
+ local color = col[k%#col + 1]
+
+   obj.effect("単色化","強さ",AMcol * math.abs(RND)/ 100 ,"輝度を保持する",0,"color",color )
+ --obj.effect("単色化","強さ",AMcol/num*k,"輝度を保持する",0,"color",col) --順番通りかチェックする用
+ if Chroma[1]>0 then
+   obj.effect("色ずれ","ずれ幅",Chroma[1]*math.abs(RND)/ 100,"角度", -angle+90,"強さ",100*math.abs(RND)/ 100,"type",Chroma[2])
+  end
+
+  RND = RND * offsetrange
+
+  local alpha=obj.alpha 
+
+  if fade==1 then alpha=alpha*(1-progress) end
+  if obj.track3==-120 then alpha=0 end
+  obj.draw(
+  math.sin(math.rad(angle-R-90))*RND + X + MX + math.cos(math.rad(RZ)),
+  math.cos(math.rad(angle-R-90))*RND + Y + MY + math.sin(math.rad(RZ)),
+  Z,
+  ZOOM,alpha,
+  0,0,RZ
+  )
+
+ end
+
+
+--////////////////////////////--
+else 
+--////////////////////////////--
+
+ obj.setoption("blend","alpha_add")
+ for i = 0, num-1 do
+   obj.copybuffer("obj","cache:org")
+   local W = -w/2 + w/(num)*(i+0.5)
+   local expansion = (w/num)*expansion
+   local x =  math.cos(math.rad(angle-90))*W
+   local y = -math.sin(math.rad(angle-90))*W
+   local RND = rand(randmin,randmax ,seed,i)/100 * offset
+   local MX,MY = 0, 0
+
+----------------- 追加オプション
+if MSE~=nil then
+
+  local rnd = rand(-1000,1000 ,seed,i)/1000
+ if(MSE.pos==1)then
+    MX = rnd * MSE.x
+    MY = rnd * MSE.y
+ else
+    if(MSE.randX==1)then
+      x = x + MSE.x * rnd 
+    else 
+      x = x + MSE.x
+    end
+  
+   if(MSE.randY==1)then 
+      y = y + MSE.y * rnd
+   else 
+     y = y + MSE.y
+   end
+  
+ end
+  
+  Z = rnd * MSE.z
+  offset = offset * MSE.offset
+  progress = progress * math.min(1,math.max(MSE.offset,0))
+  blur = MSE.blur
+  temptype = MSE.temp
+  if(LoadTemp==1 and temptype==1)then X,Y,ZOOM,RZ = obj.x,obj.y,obj.getvalue("zoom")/100, obj.getvalue("rz") end 
+
+end
+-----------------
+
+   obj.effect("斜めクリッピング","幅",math.max(1,w/num + 4 + expansion*2) ,"角度", -angle ,"中心X",x,"中心Y",y,"ぼかし",blur)
+
+  
+   if obj.check0 then
+      RND = (i%2-0.5)*2 * offset
+   end
+
+ local color  = col[i%#col + 1]
+  obj.effect("単色化","強さ",AMcol * math.abs(RND)/ 100 , "輝度を保持する",0,"color",color )
+  if Chroma[1]>0 then
+   obj.effect("色ずれ","ずれ幅",Chroma[1]*math.abs(RND)/ 100,"角度", -angle+90,"強さ",100*math.abs(RND)/ 100,"type",Chroma[2])
+  end
+
+
+  RND = RND * offsetrange
+
+  local alpha=obj.alpha 
+
+  if fade==1 then alpha=alpha*(1-progress) end
+  if obj.track3==-120 then alpha=0 end
+  obj.draw(
+  math.sin(math.rad(angle-R-90))*RND + X + MX + math.cos(math.rad(RZ)),
+  math.cos(math.rad(angle-R-90))*RND + Y + MY + math.sin(math.rad(RZ)),
+  Z,
+  ZOOM,alpha,
+  0,0,RZ
+  )
+
+ end
+
+
+
+end
+--////////////////////////////--
+
+if LoadTemp==1 then
+obj.copybuffer("obj","tmp")
+
+if temptype==1 then
+obj.ox,obj.oy=obj.ox-obj.x,obj.oy-obj.y
+obj.zoom = obj.zoom*100/obj.getvalue("zoom")
+obj.rz=0
+end
+
+end
+
+
+end
+
+if(obj.index==obj.num-1)then  MSE=nil  end
+

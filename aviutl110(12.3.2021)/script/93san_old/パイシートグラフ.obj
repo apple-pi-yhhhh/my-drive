@@ -1,0 +1,271 @@
+--[[
+rikkyさんの「扇クリッピングR」に同梱されているfan_clipping.luaを使用しています。
+このスクリプトと同じ場所にfan_clipping.luaを置いてください。
+
+数値にテーブルで値を入力すると円グラフを作ります。
+数値補正にチェックをいれると数値の合計を100%として扱います。
+チェックなしだと入力値をそのまま使用します。(100だと一回転)
+
+数値ソートは数値を並び替えます。 0=そのまま / 1=大きい順 / 2=小さい順 です。
+
+数値表示は 0=非表示 / 1=百分率 / 2=入力値 です。
+
+位置[進捗/ｻｲｽﾞ]	は 数値表示位置を%で指定します。
+位置[進捗/ｻｲｽﾞ] = {進捗での移動具合, 円サイズとのずれ具合}
+ 
+線色/字色はテーブル入力だと複数の色を使えます。
+線色は普通に色を入れると勝手にグラデーションになります。
+グラデーション化が嫌な場合はカッコで括ってください。 0xff0000 → {0xff0000}
+また線色は空欄かマイナスだと初期値が呼び出されます。
+字色は空欄だと線色と同じになります。
+
+進捗倍率はそのままトラックバーの進捗に倍率をかけます。
+
+クリップリミッターは360度以上にならないようにします。
+
+進捗ズレ%と進捗順 は さつきさんのTAシリーズにおける間隔と登場順と同じようなものです。
+
+
+
+※テーブル入力は文字制限をすぐにオーバーしてエラーになりやすいので
+一度変数に入れてから入力したほうがいいです。
+
+]]
+
+--track0:サイズ,0,2000,400,1
+--track1:線幅,1,1000,20,1
+--track2:進捗%,0,100,100,0.01
+--track3:位置ズレ,-100,100,0,1
+--check0:先端を丸くする,0
+--dialog:数値,local par={10,20,30,40};数値ソート[0/2],local sort=1;数値補正/chk,local rev=1;数値表示[0/2],local info=1;位置[進捗/ｻｲｽﾞ],local adj={50,20};線色[テーブル可]/col,local col=nil;フォント,local font="";フォントサイズ,local fontsize=20;字色[テーブル可]/col,local fontcol=nil;進捗倍率%,local comp2=100;進捗ズレ%,local inv=0;進捗順[0/5],local jun=0;クリップリミッター/chk,local limit=0;線幅[rand/seed],local RND={0,7352};仮想バッファ/chk,local tmpbuf=1;
+
+require("fan_clipping")
+
+local num=#par
+
+RND=RND or {0,0}
+local rand_t = {}
+local seed = RND[2] or 32665
+for i=1,num+3 do
+ rand_t[i] = rand(-500,1000,seed,i)*.001
+end
+
+
+if col==nil then
+   col = {0x389ba6,0xf2e2c4,0xf29422,0xf27830,0xf24b0f}
+elseif not string.find(tostring(col),"table:") then
+  if col<0 then 
+	col = {0x4f3538,0x30a4a1,0xefd5ae,0xf0a24c,0xeb3979} --require("Mytools").Color80[-col%80+1]
+   else
+   local h,s,v=HSV(col)
+    local t={}
+        col={}
+    for i=0,num-1 do
+     local V =  (1/num * i)
+     	if s<1 then
+		col[i+1]=HSV( h, s, v*(1-V*.9))
+     	else
+		col[i+1]=HSV( h+V*100, s*(1-V*.9) , v)
+		
+        end
+    end
+	--col = {col,HSV(h+10,s*.8,v),HSV(h+20,s*.5,v),HSV(h+30,s*.2,v)}
+  end
+end
+
+if fontcol==nil then
+	fontcol=col
+elseif not string.find(tostring(fontcol),"table:") then
+	fontcol={fontcol}
+end
+
+if font=="" then font="Montserrat Light" end
+	fontsize=fontsize or 20
+
+
+--数値ソート
+sort = sort or 0
+if sort==1 then
+ table.sort(par, function(a,b) return (a>b) end )
+ elseif sort>1 then
+ table.sort(par)
+ end
+
+
+--数値の合計を100に補正
+local n=0
+
+if rev==0 then
+ n=1
+else
+ for i =1,num do  
+ n=n+par[i] 
+ end
+ n=100/n
+end
+
+
+adj = adj or {50,0}
+
+local size = obj.track0 + math.max(1,obj.track3 * obj.track0*.01)*num
+size = math.floor(size)
+
+
+--仮想バッファ用にzoomとrzを用意
+local rz = obj.rz
+local zm = obj.getvalue("zoom")*.01
+if tmpbuf==1 then
+	rz = 0
+	zm=1
+	local tsize=size + size%2 + 50 + math.max(0,adj[2])*2
+	obj.setoption("drawtarget","tempbuffer",tsize,tsize)
+end
+
+
+
+
+comp2=comp2 or 100
+comp2=comp2*.01
+
+local line = math.max(1,obj.track1)
+local comp0=(obj.track2*.01)
+
+
+--進捗ずれは rikkyさんのシルエットブラインドを参考に。
+
+inv=math.min(inv,100)
+inv=(1+(1/num-1)*(inv)*.01)
+local reinv=(1-inv)/num
+
+
+
+--進捗順の変更
+jun=jun or 0
+local index={}
+for i=0,num-1 do
+local k=i+1
+if(jun<1) then
+	index[k] =i 
+elseif(jun<2) then
+	index[k]=num-1-i 
+elseif(jun<3) then
+	local indexes = {}
+	for j=0,num-1 do
+		indexes[j+1]=j
+	end
+	for j=0,num-1 do
+		local dest = 0
+		dest=rand(0,num-1, -num - math.abs(seed),j+1)
+		local swap      = indexes[j+1]
+		indexes[j+1]    = indexes[dest+1]
+		indexes[dest+1] = swap
+	end
+	index[k]=indexes[k]
+elseif(jun<4) then
+	index[k]=rand(0,100*(num-1),i+seed,0)/100 
+elseif(jun<5) then
+	index[k]=math.abs((num-1)/2-i) 
+else
+	index[k]=(num-1)/2-math.abs((num-1)/2-i) 
+end
+end
+
+--さつきさんのTAシリーズのシャッフル部と同じです	
+
+
+
+
+
+local CR = 360
+local lm = {720,360}
+
+--fan_clippingの実行
+
+for i=0,num-1 do
+
+-- 進捗順の変更を使う場合
+local v = (comp0 - index[i+1] * reinv)/inv
+local size=obj.track0 + (obj.track3 * obj.track0 *.01) * (num-index[i+1]) 
+
+-- 進捗順の変更を使わない場合
+--local v = (comp0 - i * reinv)/inv
+--local size=obj.track0 + (obj.track3 * obj.track0 *.01) * (num-i])
+        
+v = math.max(0,math.min(1,v))
+
+local crip=par[i%(num)+1]*3.6*n
+local comp = v * comp2
+local c_comp = crip * comp
+      c_comp = math.min(lm[limit+1],c_comp)
+
+size=math.max(1,size)
+local alp=obj.alpha
+if size<50 then
+ alp=(alp * size*.02)^2
+end
+
+
+if comp>0 then
+ local line = line * (1 + (rand_t[i+1]) *RND[1]*.1)
+       line=math.max(1,line)
+     
+obj.load("figure","円",col[i%(#col)+1],size,line)
+ 
+
+ fan_clipping(0,CR,360 - c_comp )
+
+if tmpbuf==1 then
+obj.setoption("drawtarget","tempbuffer")
+obj.setoption("blend",0)   -- fan_clipping内でblendモードがalpha_addに変更されているので通常に戻してdraw するべきか否か。
+end
+
+obj.draw(0,0,0,1,alp)
+
+ if(obj.check0 and crip*comp<720 )then
+
+ obj.load("figure","円",col[(i)%(#fontcol)+1],line*1.7)
+local size_r = (size-line-2.5)/2*zm
+ obj.draw(
+  math.cos( math.rad(180+CR - c_comp +rz)) * size_r,
+  math.sin( math.rad(180+CR - c_comp +rz)) * size_r,
+		0,1/1.66 ,alp,0,0,-obj.rz)
+ obj.draw(
+  math.cos( math.rad(180+CR+rz)) * size_r,
+  math.sin( math.rad(180+CR+rz)) * size_r,
+		0,1/1.66 ,alp,0,0,-obj.rz)
+ end
+ 
+end
+
+
+
+
+info = info or 1
+
+if(info>0)then
+		
+ obj.setfont(font,fontsize,2,fontcol[(num-i)%(#fontcol)+1])
+
+ if info==1 then
+	obj.load(string.format("%.1f",par[i+1]*n*comp).."%")
+ elseif info>1 then
+	obj.load(par[i+1]) 
+ end
+ 
+	
+ local rot,rad = adj[1]*.01, size/2 + adj[2]
+ obj.draw(
+	math.cos( math.rad(180+CR - (c_comp*rot) + rz))*rad*zm, 
+	math.sin( math.rad(180+CR - (c_comp*rot) + rz))*rad*zm,
+	  0,.7,alp,0,0,-obj.rz)
+end
+
+ CR= CR - crip
+
+end
+
+
+
+if tmpbuf==1 then
+obj.load("tempbuffer")
+end

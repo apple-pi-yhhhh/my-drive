@@ -1,0 +1,1057 @@
+--[[
+
+◆ Delay個別 ◆ ////////////////////////////////////////////
+ 
+  「個別オブジェクトを中間点などを打って移動させた場合」、ずるっと行動が遅れていくアニメーション効果です。
+  座標、回転、縦横比、(※拡大率)、(※透明度)、に対応します。
+  
+  ※拡大率、透明度の二つですが、拡大率は0.01以上、透明度は99.9以下の範囲で動作させて下さい。
+    但しダイアログ設定で別のレイヤーを指定している場合はこの問題は発生しません。
+
+ ○トラックバー○
+   
+   ・Delayが100の場合だと初めのオブジェクトから最後のオブジェクトのズレが1秒になります。
+     オブジェクトの数が幾つでも同じ動作です。1000だと十秒のズレとなっています。
+     ダイアログ設定のDelay時間補正のチェックを外すと個別オブジェクト毎のズレ時間をミリ秒単位で指定する様になります。
+
+   ・randomは移動のタイミングをばらつかせます。
+   
+   ・時間ブレはrandomと似ていますがふらふらと未来時間や過去を行き来します。小賢しい動きです。
+ 
+   ・Orderは遅れる順番を行単位で動作させます。
+     1:上から、2:右から、3:中央から縦、4:中央から横、5:中央から同心円状、と言った感じになります。
+
+   ・逆順にチェックを入れると動作順が反転します。
+
+ 
+ ○ダイアログ設定○
+   
+   ・「Delay時間補正」にチェックすると遅れる時間がオブジェクトの数に関わらず一定になります。(デフォルト設定)
+     トラックバーのDelayが100だと最初のオブジェクトと最後のオブジェクトのずれが1秒になります。1000で十秒です。
+   
+   ・「Seed」はランダムのシード値です。
+   
+   ・「倍率」は移動と回転に倍率を掛けます。
+   
+   ・「補正」は主にオブジェクトの終了際で、参照する値を見失うのを防ぐために強引に早回しをするタイミングを設定します。適当です。
+     ※早回ししたくない場合は オブジェクトの最後のフレームに中間点を打ち、(Delay x 個別オブジェクト総数) 秒分だけオブジェクトを伸ばします。
+       またこの場合は補正は0にします。
+   
+   ・「ブレ周期」は時間ブレの周期を設定します。
+   
+   ・「グループ回転」にチェックを入れると回転動作がグループ制御の様な動きになります。
+     カメラ制御かグループ制御を使用していない場合は少しおかしな感じになる場合があります。(z軸移動が拡大縮小になる為)
+
+   ・「親レイヤー指定」は別のレイヤーの動きを追従させることができます。0か空欄で無効化します。
+     レイヤーを指定した場合は自分の動きを加算させることができます。
+     ※グループ回転チェック時は軸回転を行う場合、指定したレイヤーの座標が中心点のように働く点に注意して下さい。
+       基本効果の座標などで位置移動すれば問題なしです
+   
+   ・「indexを無視」にチェックを入れると "Orderが0の場合" オブジェクトの順番を無視して動作します。
+     完全にランダムにしたい場合に使用します。 (ランダムか時間ブレが0だと何も起こりません。)
+     ※Orderが0以外だと反対にパターンの順番にオブジェクトの順番を少し加味して動作します。
+   
+   ・「Orderscript」は時間ズレの方法をスクリプトで弄る為の小窓です。
+     (通常はobj.indexが内部で代入されています。「indexを無視」と「infoview」にチェックして obj.ox/30 等と入れてみると何をやっているか判り易いかも)
+
+   ・「座標出力」を 1 にするとオブジェクトの座標をテーブルに収めて出力します。
+     例えばこのスクリプトを使用しているオブジェクトがレイヤー3にある場合、 DM.layer3  と入力すると呼び出せます。
+     例によって格子線の座標項目などに入力すると簡単にリンクします。
+     ※ 2 の場合はx,y軸のみを出力します。
+    
+   ・「infoview」は動作順序を色で表示します。赤いほど遅れていて、また青い場合は未来時間を示しています。
+ 
+
+
+ ◆ 単色化C ◆////////////////////////////////////////////
+  
+    グラデーションを使った単色化です。グラデーションです。
+
+
+○ダイアログ設定○
+
+  ・index指定モードにチェックを入れると特定の文字だけを着色します。idズラシで位置をずらせます。
+
+    数字 5 だと 最初の文字から5文字分まで着色。
+   
+    一つ一つ個別に指定する場合はテーブルで。 
+    { 1, 4, 6, 7 } = 1,4,6,7 文字目 を着色
+
+    文字列の場合は範囲で指定します。 カンマで区切ってください。            
+    " 3, 12 "   =    3から12文字目を着色
+  
+
+ 
+ ◆ 個別カラー ◆ ////////////////////////////////////////////
+  
+  個別オブジェクトを指定した色で塗ります。
+
+ ○トラックバー○
+   
+  ・Shiftで対応する色をずらします。
+  
+  ・リピートは同じ色を繰り返す回数を指定します。
+    マイナスの場合はランダムになり、値をランダムシードに使います。
+ 
+  ・blend はカラーの合成モードで、13番目は単色化の輝度を保持するを使用します。
+  
+  ・レイヤーで色分けは個別オブジェクトではなく、レイヤー位置で色が変化します。
+    Ctrl+dで複製したり、グループ制御で纏めて色を変えることができます。
+ 
+ ○ダイアログ設定○
+  
+  ・ col1からcol5まで指定出来ます。無効化したい場合は空欄にします。
+     col1のみテーブル入力を受け付けます。ダイアログ文字数の仕様が許す限り無制限です。この場合col2以降は無視されます。
+   
+  ・Shift (option)はスクリプト用の入力窓です。
+  ・強度  (option)はスクリプト用の入力窓です。
+
+
+
+ ◆ 個別カラー(背景色同化)◆ ////////////////////////////////////////////
+  
+   背景色で着色します。(以前何処かに紛れたものと一緒)
+   縁取りやシャドーを併用すると透明オブジェクトのフリが出来るかも。
+  ・合成モードは色の合成モードを変えます。
+  ・ブラーは色の変化を滑らかにします。マイナスとプラスの差はあまりありません。
+  
+    着色した色は m_col というテーブルに収めて出力しているので、他のオブジェクトに渡すことができます。
+   
+   
+
+]]
+
+
+
+
+------------------------------------------------------------------------------------------------
+@Delay個別
+------------------------------------------------------------------------------------------------
+--track0:Delay,-1000,1000,100,0,01
+--track1:random,0,200,0,0.01
+--track2:時間ブレ,0,1000,0
+--track3:Order,0,5,0,1
+--check0:逆順,0
+--dialog:Delay時間補正/chk,local DN=1;Seed,local seed=0;倍率[移動/回転],local mag={100,100};終了補正(秒)[in/out],local correct={0,0};時間ブレ周期,local interval=100;グループ回転/chk,local RotW=0;親レイヤーを指定,local layer=0;indexを無視/chk,local fullrand=0;(Orderscirpt),local Order2=0;座標を出力[0/2],local put_pos=0;infoview/chk,local dbg=0;
+
+local function Delay_id(delaytime,adjin,adjout,index,magp,magr,layer,rotation,mode)
+ local delay  = delaytime/1000
+ local adjin  = adjin  or 1
+ local adjout = adjout or 1
+ local gv     = obj.getvalue
+ local L = layer or obj.layer
+ if L==0 then L=obj.layer end
+ local mode   = mode or "counter"
+ if(L~=obj.layer)then mode="nomal" end
+ 
+ L = "layer"..L.."."
+ if not index then index=obj.index+1 end
+ if not adjout then adjout=adjin end
+
+  local function IO(induration, outduration,time,total)
+    local iD=induration or 1
+    local oD=outduration or 1
+    local time=time or obj.time
+    local total=total or obj.totaltime
+    local start=math.min(1,math.max(0,(time/iD)))
+    local ending=(total-time-oD)/oD + 1
+    ending=math.min(1,math.max(0,ending))
+    return (start*ending^2)
+  end
+
+ local id = index*delay*IO(adjin,adjout)
+       id = math.min(obj.totaltime,math.max(0,obj.time-id))
+
+
+
+if mode=="track" then
+   return gv(0,id),gv(1,id),gv(2,id),gv(3,id)
+else
+ local rx,ry,rz = obj.rx,obj.ry,obj.rz
+ local alpha = obj.alpha
+ local zoom=obj.zoom
+ local x,y,z=obj.ox, obj.oy, obj.oz
+ 
+ if mode=="counter" then
+   rx,ry,rz = -gv("rx")+obj.rx,-gv("ry")+obj.ry,-gv("rz")+obj.rz
+   alpha = obj.alpha*100/gv(L.."alpha")/100
+   zoom=obj.zoom*100/gv(L.."zoom")
+   x,y,z=obj.ox-obj.x, obj.oy-obj.y, obj.oz-obj.z
+ end
+ 
+ obj.ox=x+gv(L.."x",id)*magp
+ obj.oy=y+gv(L.."y",id)*magp
+ obj.oz=z+gv(L.."z",id)*magp
+ obj.rx=rx+gv(L.."rx",id)*magr
+ obj.ry=ry+gv(L.."ry",id)*magr
+ obj.rz=rz+gv(L.."rz",id)*magr
+ obj.zoom  = zoom*gv(L.."zoom",id)/100 
+ obj.alpha = alpha*gv(L.."alpha",id)
+ obj.aspect= gv(L.."aspect",id)
+  if(rotation==1)then
+   --回転
+   local ROT = function(x,y,z,rx0,ry0,rz0)
+   local sin,cos,rad=math.sin,math.cos,math.rad
+   local function Rx(x,y,z,ang) return x                     ,y*cos(ang)-z*sin(ang), y*sin(ang)+z*cos(ang) end
+   local function Ry(x,y,z,ang) return x*cos(ang)+z*sin(ang) ,y                    ,-x*sin(ang)+z*cos(ang) end
+   local function Rz(x,y,z,ang) return x*cos(ang)-y*sin(ang) ,x*sin(ang)+y*cos(ang), z                     end
+    local X,Y,Z
+    --local rx0,ry0,rz0 = rx0 or rad(rx+gv(L.."rx",id)),ry0 or rad(ry+gv(L.."ry",id)), rz0 or rad(rz+gv(L.."rz",id))
+    X,Y,Z=Rz(x,y,z,rz0)
+    X,Y,Z=Ry(X,Y,Z,ry0)
+    X,Y,Z=Rx(X,Y,Z,rx0)
+    return X,Y,Z
+   end
+   obj.ox,obj.oy,obj.oz = ROT(obj.ox,obj.oy,obj.oz, math.rad(rx+gv(L.."rx",id)*magr) , math.rad(ry+gv(L.."ry",id)*magr) ,math.rad(rz+gv(L.."rz",id)*magr))
+  end
+
+ end
+
+end
+
+--アニメーション効果震える簡易版
+local function shake(interval,min,max,seed)
+    if not min then min,max,seed=-1,1,0 end
+    seed=seed or 0
+   if interval==0 then 
+    return rand(min,max,seed)
+   else
+    local s=seed
+    min,max=min*1000,max*1000
+    local t = obj.time*100/interval
+    local p = math.floor(t)
+    t = t-p
+    local x0 = rand(min,max,s,p+0)/1000
+    local x1 = rand(min,max,s,p+1)/1000
+    local x2 = rand(min,max,s,p+2)/1000
+    local x3 = rand(min,max,s,p+3)/1000
+    return obj.interpolation(t,x0,x1,x2,x3)
+   end
+end
+
+local Delaytime   = obj.track0
+local Correct_in  = correct[1]
+local Correct_out = correct[2]
+local Random      = obj.track1/100
+local Timeshake   = obj.track2/10
+local Index       = obj.index
+if fullrand==1 then Index=Index+1 end
+local zoom = obj.getvalue("zoom")/100
+if obj.getoption("multi_object") then
+ if(obj.check0)then
+  Index = obj.num-Index
+ end
+ if(DN==1)then
+   if(Order2==0 or Order2=="debug")then
+    Index = Index/(obj.num-1) *10
+   else
+    Index = Index/(obj.num) *10
+   end
+  end
+else
+  Index = 1
+end
+
+local Order1        = obj.track3
+local Order2        = Order2 or 0
+if Order2=="debug" then Order2=0 dbg=2 end
+local Pattern     = Index
+local X,Y,Z       = obj.ox-obj.cx*zoom,obj.oy-obj.cy*zoom,obj.oz
+local mag = mag or {100,100}
+local magp,magr=mag[1]/100,mag[2]/100
+if fullrand==1 then 
+  if Order1==0 then
+   Order2=Order2-Index
+  else
+   Order2=Order2+Index/(obj.num/5)
+  end
+end
+
+if(DN==1 or Order1>0)then
+ Random = Random/10
+end
+
+if Delaytime==0 then 
+   Random=0
+ else
+   Random = Random/Delaytime*10
+end
+
+if obj.track1>0 then
+ Pattern = Pattern +  rand(1,1000,obj.index,seed)*Random * Delaytime/100
+end
+
+if obj.track2>0 then
+ Pattern = Pattern + shake(interval,-1000,1000,obj.index,seed)/1000*Timeshake
+end
+
+
+if Order1==0 then
+  Delay_id(
+  Delaytime,
+  Correct_in*obj.num/Index ,             -- in補正
+  Correct_out*obj.num/Index,             -- out補正
+  Pattern + Order2,                      -- 行動パターン(index)
+  magp,magr,
+  layer,
+  RotW
+  )
+
+else
+
+ if obj.index==0 then XX,YY=X,Y end
+
+ local CR=1
+ if obj.getoption("multi_object") then
+  if not (obj.check0) then
+   if        Order1==1 then
+        Pattern = math.abs(XX+obj.ox-obj.cx*zoom) / math.abs(XX)/2    --左
+      elseif Order1==2 then
+         Pattern = math.abs(-YY+obj.oy-obj.cy*zoom) / math.abs(YY)/2  --下
+      elseif Order1==3 then
+        Pattern = math.abs(X) / math.abs(XX)              --外縦
+      elseif Order1==4 then
+        Pattern = math.abs(Y) / math.abs(YY)              --外横
+      elseif Order1==5 then
+        --Pattern = (X^2+Y^2) / ((XX/2)^2+(YY/2)^2)         --周
+        Pattern = math.sqrt(X^2+Y^2) / math.sqrt((XX)^2+(YY)^2)
+   end
+  else
+   if        Order1==1 then
+        Pattern = math.abs(-XX+obj.ox-obj.cx*zoom) / math.abs(XX)/2  --右
+      elseif Order1==2 then
+        Pattern = math.abs(YY+obj.oy-obj.cy*zoom) / math.abs(YY)/2   --下
+      elseif Order1==3 then
+        Pattern = 1-math.abs(X) / math.abs(XX)           --中縦
+      elseif Order1==4 then
+        Pattern = 1-math.abs(Y) / math.abs(YY)           --中横
+      elseif Order1==5 then
+        --Pattern = 2-(X^2+Y^2) / ((XX/2)^2+(YY/2)^2)      --内
+        Pattern = 1-math.sqrt(X^2+Y^2) / math.sqrt((XX)^2+(YY)^2)      --内
+   end
+  end
+  Pattern=Pattern*10
+ end
+
+
+ if obj.index==obj.num-1 then XX,YY=nil,nil end
+
+  if obj.track1>0 then
+   Pattern = Pattern + rand(000,1000,obj.index,seed)*Random * Delaytime/100
+  end
+
+  if obj.track2>0 then
+    Pattern = Pattern + shake(interval,-1000,1000,obj.index,seed)/1000*Timeshake
+  end
+
+ Delay_id(
+ Delaytime/CR,
+ Correct_in,              -- in補正
+ Correct_out,             -- out補正
+ Pattern + Order2,        -- 行動パターン(index)
+ magp,magr,
+ layer,
+ RotW
+ )
+end
+
+
+if DM==nil then DM={} end
+local layer="layer"..obj.layer
+
+if obj.index==0 then 
+ DM[layer] = {} end
+
+if (put_pos>0) and (put_pos<=2) then
+  table.insert(DM[layer],obj.ox+obj.x)
+  table.insert(DM[layer],obj.oy+obj.y)
+if put_pos==1 then
+  table.insert(DM[layer],obj.oz+obj.z)
+end
+else
+ DM[layer]=nil 
+end
+
+
+
+
+ local PT=obj.track3
+ OrderNN=PT
+ PTNN=(Pattern + Order2)
+
+if dbg>=1 then
+ --local PT=obj.track3
+ --OrderNN=PT
+ --PTNN=(Pattern + Order2)
+ local PTND = PTNN*Delaytime/100
+ local x,y,z=obj.ox,obj.oy,obj.oz
+ local cx,cy,cz=obj.cx,obj.cy,obj.cz
+ local rx,ry,rz = obj.rx,obj.ry,obj.rz
+ local zoom,alpha = obj.zoom,obj.alpha
+
+ local line,alp_org,alp2 = 1000,1,0.7
+ local w,h=obj.getpixel()
+ local S=math.max(w,h)
+ local asp=(h/w*w)/S - (w/h*h)/S
+
+ obj.setoption("drawtarget","tempbuffer",w,h)
+ obj.draw(0,0,0,1,alp_org)
+
+local red  = HSV(10, math.min(500,91*(math.max(0,PTND)/10)),100)
+local blue = HSV(202,math.min(500,65*(-PTND/10)), 65)
+ obj.load("figure","四角形", red , S, line, asp)
+ if PTNN<0 or Delaytime<0 then obj.effect("単色化","color",blue ,"輝度を保持する",0,"強さ",100*-PTND/10) end
+ obj.draw(0,0,0,1,alp2)
+
+
+ obj.load("figure","四角形", red , S, 1, asp)
+ if PTNN<0 or Delaytime<0 then obj.effect("単色化","color",blue,"輝度を保持する",0,"強さ",100*-PTND/10) end
+ obj.draw(0,0,0,1,0.9)
+
+  if dbg==2 then
+   --テキストオブジェクトではテキストをloadすると上手く表示できないらしい…分割オブジェクトならOK
+   obj.setfont("Bell Gothic Std Black",math.min(w/4,20),0,0xffffff) --"Bell Gothic Std Black"
+   obj.load("id."..obj.index)
+   obj.draw(-w/2+obj.w/2,-h/2+obj.h/1.5,0,0.6,1)
+   obj.load(string.format("%.2f",PTNN*Delaytime/1000))
+   obj.effect("単色化","color",0xff3325,"輝度を保持する",0,"強さ",100*(1-PTNN/10))
+   obj.draw(0,0,0,0.8,0.9)
+
+   if obj.index==obj.num-1 then
+    obj.load("ORDER="..Order1.."")
+    obj.draw(0,-15,0,0.4,1)
+    obj.load(math.floor(obj.time*10)/10)
+    obj.draw(0,15,0,0.5,1)
+   end
+  end
+
+ obj.copybuffer("obj","tmp")
+ obj.ox,obj.oy,obj.oz = x,y,z
+ obj.rx,obj.ry,obj.rz  =rx,ry,rz
+ obj.cx,obj.cy,obj.cz = cx,cy,cz
+ obj.zoom,obj.alpha = zoom,alpha
+
+
+end
+
+
+
+obj.setoption("drawtarget","framebuffer")
+
+
+
+------------------------------------------------------------------------------------------------
+@Delay個別(Lite)
+------------------------------------------------------------------------------------------------
+--track0:Delay,-1000,1000,100,0,01
+--track1:random,0,500,0,0.01
+--track2:時間補正,0,1,1,1
+--check0:逆順,0
+--dialog:Seed,local seed=0;親レイヤー指定,local layer=0;indexを無視/chk,fullrand=0;グループ回転/chk,local rotation=0;座標を出力/chk,local put_pos=0;閾値(透明/明度),local Alp_Value={0,0};Order(script),local order=0;info/chk,local info=0;
+
+local gv=obj.getvalue
+local delay=obj.track0
+local RND=0
+if obj.track1>0 then
+ RND = obj.rand(0,1000,seed,obj.index+1)/100 * obj.track1/100
+end
+
+local id  = obj.index
+    order = order or 0
+ 
+if fullrand==1 then 
+   id=1
+else
+
+  if obj.check0 then
+   id=obj.num-id
+  end
+
+  if obj.track2==1 then
+   id=(id)/obj.num
+  else
+   id = id/10
+  end
+end
+
+ id=id * obj.track0/100 * (1+RND) + (order*delay/100)
+ local ID=id
+
+
+id = math.max(0,math.min(obj.totaltime,obj.time-id))
+
+local L="layer"..obj.layer.."."
+if layer>0 then 
+ L="layer"..layer.."." 
+end
+
+
+  obj.ox = obj.ox + gv(L.."x",id)   - obj.x
+  obj.oy = obj.oy + gv(L.."y",id)   - obj.y
+  obj.oz = obj.oz + gv(L.."z",id)   - obj.z
+ 
+ if(rotation==1) then
+    --回転
+    local ROT = function(x,y,z,rx0,ry0,rz0)
+    local sin,cos,rad=math.sin,math.cos,math.rad
+    local function Rx(x,y,z,ang) return x                     ,y*cos(ang)-z*sin(ang), y*sin(ang)+z*cos(ang) end
+    local function Ry(x,y,z,ang) return x*cos(ang)+z*sin(ang) ,y                    ,-x*sin(ang)+z*cos(ang) end
+    local function Rz(x,y,z,ang) return x*cos(ang)-y*sin(ang) ,x*sin(ang)+y*cos(ang), z                     end
+     local X,Y,Z
+     X,Y,Z=Rz(x,y,z,rz0)
+     X,Y,Z=Ry(X,Y,Z,ry0)
+     X,Y,Z=Rx(X,Y,Z,rx0)
+     return X,Y,Z
+    end
+  obj.ox,obj.oy,obj.oz = ROT(obj.ox,obj.oy,obj.oz, math.rad(gv(L.."rx",id)) , math.rad(gv(L.."ry",id)) ,math.rad(gv(L.."rz",id)))
+ end
+
+  obj.rx = obj.rx + gv(L.."rx",id)  - gv("rx")
+  obj.ry = obj.ry + gv(L.."ry",id)  - gv("ry")
+  obj.rz = obj.rz + gv(L.."rz",id)  - gv("rz")
+
+
+obj.zoom   = gv(L.."zoom",id) * 100/gv("zoom") / 100
+obj.alpha  = gv(L.."alpha",id)  * 100/gv("alpha") / 100
+obj.aspect = gv(L.."aspect",id)
+
+
+
+--座標の格納
+ if DM==nil then DM={} end
+ local l="layer"..obj.layer
+  if obj.index==0 then 
+   DM[l] = {} 
+  end
+ Alp_Value = Alp_Value or {0,0}
+ local A = Alp_Value[1] or 0
+       A = A/100
+ local V = Alp_Value[2] or 0
+
+if(put_pos==1)then
+
+  local function Ti(t)
+    if #t<obj.num*3 then
+     table.insert(t,obj.ox+obj.x)
+     table.insert(t,obj.oy+obj.y)
+     table.insert(t,obj.oz+obj.z)
+    end
+    return t
+  end
+ 
+ local w,h=obj.getpixel()
+ local col,a=obj.getpixel(w/2,h/2)
+ local h,s,v=HSV(col)
+ local r,g,b=RGB(col)
+ local rgb=(r+g+b)/(255*3)
+  v=rgb*100
+
+  if(A>0)then
+    if(a>=A and v>=V)then
+       DM[l]=Ti(DM[l])
+    end
+  else
+    if(v>=V)then
+       DM[l]=Ti(DM[l])
+    end
+  end
+
+else
+  DM[l]=nil 
+end
+
+--Infomation
+
+if info==1 then
+ local color=0xe03c33
+ if ID<0 then 
+   color=0x448ea6
+   ID=-ID 
+ end
+obj.effect("単色化","強さ",ID/2*100,"color",color,"輝度を保持する",0)
+local ox,oy,oz=obj.ox,obj.oy,obj.oz
+--obj.load(string.format("%.2f",ID))
+obj.ox,obj.oy,obj.oz=ox,oy,oz
+
+end
+
+
+------------------------------------------------------------------------------------------------------------------------
+@DelayDraw
+------------------------------------------------------------------------------------------------------------------------
+--track0:Delay,0,10,0.5,0.01
+--track1:描画数,2,500,5,1
+--track2:Random,0,100,0
+--track3:色強度,0,100,100
+--check0:描画順反転,0
+--dialog:col1(テーブル可)/col,local col1=0x00819c; col2/col,col2=0xff0048; col3/col,col3=0xfcab5c;col4/col,col4=0x9fcbeb;col5/col,col5=0xf1e1f0;○先頭は塗らない/chk,local np=0;○グラデーション化/chk,local grd=0;塗りfadetype[0~2],local npfade=0;透明度Decay%,local decay=0;個別Delay,local indelay=0;└ order[1~3],local order=0;ﾗﾝﾀﾞﾑ位置,local randP=0;└ サイズ,local randS=0;└ 時間,local randT=0;seed,local seed=0;
+--------------------------------------------------------------------------------
+local function lerp(t,a,b) return a + (b-a) * t end
+local function clamp(x) return (x<=0 and 0) or (x>=1 and 1) or x end
+local function linear(t,a,b,A,B) return clamp((t-a)/(b-a)) * (B-A)+A end
+local abs = math.abs
+local hsv = 0
+local CNV = (hsv==1 and HSV) or (RGB)
+local function color_lerp(t ,c0 ,c1)
+	local a,b = {CNV(c0)},{CNV(c1)}
+	return CNV(a[1]+(b[1]-a[1])*t , a[2]+(b[2]-a[2])*t, a[3]+(b[3]-a[3])*t )
+end
+
+local index = obj.index
+local order = order or 1
+if (abs(order)==2) then
+	index = abs(obj.index*2 - obj.num + 1)
+elseif (abs(order)==3) then
+	local ind = {}
+	for i=0,obj.num-1 do
+		ind[i+1] = i
+	end
+	math.randomseed(seed or 0)
+	local j
+	for i = obj.num,2,-1 do
+		j = math.random(i)
+		ind[i], ind[j] = ind[j], ind[i]
+	end
+	index = ind[obj.index+1]
+elseif (abs(order)>3) then
+	index = obj.rand(0,obj.num-1,(seed or -1) + abs(order),1)
+end
+index = index / math.max(1,obj.num-1)
+if (order<0) then
+	index = 1 - index
+end
+
+--------------------------------------------------------------------------------
+obj.setoption("focus_mode","fixed_size")
+local gv  = obj.getvalue
+local delay  = obj.track0
+local num    = obj.track1
+local random = obj.track2/100
+local amount = obj.track3
+indelay = (indelay or 1)
+decay = (decay or 0) * 0.01
+randT = randT * random * delay
+randS = randS * random
+randP = randP * random
+
+if tostring(col1):find("table:") then
+   col1 = col1
+elseif col1<0 then
+	require("Colorize")
+	col1 = Colorize[-col1]
+	if type(col1[#col1])=="string" then table.remove(col1,#col1) end
+else
+   col1 = {col1}
+   if col2 then table.insert(col1,col2) end
+   if col3 then table.insert(col1,col3) end
+   if col4 then table.insert(col1,col4) end
+   if col5 then table.insert(col1,col5) end
+	 col2,col3,col4,col5 = nil,nil,nil,nil
+end
+
+-- 先頭を手前に表示するため遅れる方から描画する。カラー順番反転
+if not obj.check0 and (grd==1) then
+  local c={}
+    for i=0,#col1-1 do
+      c[#col1-i]=col1[i+1]
+    end
+  col1 = c
+end
+
+obj.effect()
+obj.copybuffer("cache:o","obj")
+local g_zoom  = 100/gv("zoom")
+local g_alpha = 1/gv("alpha")
+for i=0,num-1 do
+	-- if i==num-1 then obj.copybuffer("obj","cache:o") end
+	obj.copybuffer("obj","cache:o")
+	local t  = i/(num-1)
+	local dc = (num-i)*decay / num
+	if not (obj.check0) then
+		t  = 1 - t
+		dc = 1 - dc
+	end
+	local r = clamp(1-randT) + rand(1,1000,seed,seed+i)/1000 * randT
+	local delaytime = (t*delay + index*indelay)
+	local id = math.max(0,obj.time - delaytime)
+	local is_draw = 1 --(obj.time<=obj.totaltime - delaytime) and (obj.time - delaytime > 0)
+	local is_first = (obj.check0 and (i < num-1)) or (not obj.check0 and (i > 0))
+	id = math.min(id * r ,obj.totaltime)
+
+	if (is_draw) then
+		local rpx,rpy,rpz = 0,0,0
+		if (randP~=0) then
+			rpx = rand(-1000,1000,100+seed+i,i)/1000 * randP
+			rpy = rand(-1000,1000,200+seed+i,i)/1000 * randP
+			rpz = rand(-1000,1000,300+seed+i,i)/1000 * randP
+		end
+
+		local randzoom = rand(0,100,seed+i,obj.index)*0.01
+		local zoom  = gv("zoom",id)*0.01 * g_zoom
+		if not (np==1 and i>0) then
+			zoom = math.max(0, zoom + (randzoom-zoom) * randS*0.01)
+		end
+
+		local alpha = gv("alpha",id)
+		alpha = (alpha < 0.01 and 0) or (alpha * obj.alpha * g_alpha)
+		if (decay>0) then
+				alpha = alpha * dc
+		end
+
+		local x  = gv("x", id) - obj.x + rpx
+		local y  = gv("y", id) - obj.y + rpy
+		local z  = gv("z", id) - obj.z + rpz
+		local rx = gv("rx",id) - obj.rx
+		local ry = gv("ry",id) - obj.ry
+		local rz = gv("rz",id) - obj.rz
+
+		-- 単色化
+		if (amount*alpha>0) then
+			local color = col1[math.floor(i)%#col1+1]
+			if (grd==1) then
+				local C = #col1
+				local N = i/(num-1) * (1-1/C)
+				local I,D = math.modf(C * N + 1)
+				local cu = math.floor(N+I)
+				color = color_lerp(D,col1[cu],col1[cu%C+1])
+			end
+			local am = amount
+			if (npfade==1) then
+					am = am*t
+			elseif (npfade==2) then
+				am=am*(1-t)
+			end
+			if (np==1) and i >= ( (num-1) - i/(num-1) ) then --i==num-1 then
+				am=0
+			end
+			obj.effect("単色化","強さ",am,"color",color,"輝度を保持する",0)
+		end
+
+		obj.draw(x,y,z,zoom,alpha,rx,ry,rz)
+	end
+end
+
+
+------------------------------------------------------------------------------------------------------------------------
+@DelayTrack
+------------------------------------------------------------------------------------------------------------------------
+--track0:A,-1000,1000,0
+--track1:B,-1000,1000,0
+--track2:C,-1000,1000,0
+--track3:D,-1000,1000,0
+--check0:反転,0
+--dialog:DelayTime,local delay=0;Random,local RAND=0;順[0/5],local jun=0;seed,local seed=0;ID,local name="";DT.col/col,local color=0xffffff;リセット/chk,local nl=0;
+delay=delay or 0
+ease_num=ease_num or 0
+RAND=RAND or {RAND,RAND,RAND,RAND}
+seed=seed or 0
+name=name or ""
+local gv=obj.getvalue
+if obj.index==0 then
+ DT={}
+end
+
+--local ES = require("easing_uf")
+
+jun=jun or 0
+local index
+if(jun<1) then
+	index=obj.index --順番に登場
+elseif(jun<2) then
+	index=obj.num-1-obj.index --後ろから登場
+elseif(jun<3) then
+	local indexes = {}
+	for i=0,obj.num-1 do
+		indexes[i+1]=i
+	end
+	for i=0,obj.num-1 do
+		local dest = 0
+		dest=rand(0,obj.num-1, -obj.num - math.abs(seed),i+1)
+		local swap      = indexes[i+1]
+		indexes[i+1]    = indexes[dest+1]
+		indexes[dest+1] = swap
+	end
+	index=indexes[obj.index+1] --ランダム順に登場
+elseif(jun<4) then
+	index=rand(0,100*(obj.num-1),obj.index+seed,0)/100 --ランダム間隔に登場
+elseif(jun<5) then
+	index=math.abs((obj.num-1)/2-obj.index) --内側から登場
+else
+	index=(obj.num-1)/2-math.abs((obj.num-1)/2-obj.index) --外側から登場
+end	
+	
+
+
+local id = (index/obj.num) 
+
+if obj.check0 then 
+      id =((obj.num-index)/obj.num) 
+end
+
+-- if ease_num>1 then 
+--  id = ES[ease_num](id,0,1,1,1)
+-- end
+
+
+
+id = id* delay * 0.01
+
+      id = math.min(obj.totaltime,math.max(0,obj.time-id))
+
+
+local n={"A","B","C","D"}
+
+if not string.find(tostring(RAND),"table:") then
+ RAND = {RAND,RAND,RAND,RAND}
+end
+
+
+for i=0,3 do
+ if RAND[i+1]~=0 then 
+  DT[n[i+1]] = gv(i,id + rand(0,1000,seed,index)/1000 * RAND[i%(#RAND)+1]/100)
+ else
+  DT[n[i+1]] = gv(i,id)
+ end
+end
+
+DT.col = color
+
+DT[1]=DT.A
+DT[2]=DT.B
+DT[3]=DT.C
+DT[4]=DT.D
+DT[5]=color
+
+if name~="" then
+DT["col"..name] = color
+DT["A"..name] = gv(0,id)
+DT["B"..name] = gv(1,id)
+DT["C"..name] = gv(2,id)
+DT["D"..name] = gv(3,id)
+end
+
+
+if nl==1 then DT=nil end
+
+
+------------------------------------------------------------------------------------------------------------------------
+@単色化C
+------------------------------------------------------------------------------------------------------------------------
+--track0:強度,0,100,100
+--track1:合成モード,0,13,5,1
+--track2:idズラシ,-100,100,0,1
+--dialog:強度,local int=0;色/col,local col1=0xd48b3d;index指定モード/chk,local enable=0;index指定, local id={};
+--check0:info,0
+id = id or {}
+local offset=math.floor(obj.track2)
+int = int or 0
+local w,h=obj.getpixel()
+local TXTblend={"通常","加算","減算","乗算","スクリーン","ｵｰﾊﾞｰﾚｲ","比較(明)","比較(暗)","輝度","色差","陰影","明暗","差分","輝度を保持"}
+local T = id
+local n,S,E,t
+
+if enable==1 then
+if tostring(id)==T then
+    T = string.gsub(T,"%s","")
+    
+    n = string.find(T,",")
+    S = string.sub(T,1, n-1)
+    E = string.sub(T,  n+1)
+
+ t = {}
+     for i=0,E-S do
+       t[i+1]=S+i
+      end
+  id = t
+elseif not string.find(tostring(id),"table:") then
+ local n = id
+ local t = {}
+ for i=1,id do
+ table.insert(t,i)
+ end
+ id = t
+end
+
+
+ for i,v in pairs(id) do
+  if (obj.index+1)==v+offset then
+   
+
+   if obj.track1==13 then 
+    obj.effect("単色化","強さ",obj.track0+int,"color",col1)
+   else
+   obj.effect("グラデーション",
+   "強さ",obj.track0+int,
+   "中心X",0,
+   "中心Y",h/2,
+   "角度",0,
+   "幅",0,
+   "blend",obj.track1,
+   "color",col1,
+   "no_color",0,
+   "color2",col1,
+   "no_color2",1,
+   "type",0)
+  end
+
+  end
+ end
+
+else
+
+  if obj.track1==13 then 
+   obj.effect("単色化","強さ",obj.track0+int,"color",col1)
+  else
+  obj.effect("グラデーション",
+  "強さ",obj.track0+int,
+  "中心X",0,
+  "中心Y",h/2,
+  "角度",0,
+  "幅",0,
+  "blend",obj.track1,
+  "color",col1,
+  "no_color",0,
+  "color2",col1,
+  "no_color2",1,
+  "type",0)
+  end
+end
+
+local x,y=obj.ox,obj.oy
+if obj.getoption("gui") then
+if (obj.check0) then
+ if obj.index==obj.num-1 then
+ obj.copybuffer("cache:org","obj")
+ obj.setoption("drawtarget","tempbuffer",math.max(w,300+x*2),math.max(150,h))
+obj.copybuffer("obj","cache:org")
+obj.draw(x,y,0,1,obj.alpha)
+obj.setfont("メイリオ",32,4,0xffffff,0x888888)
+obj.load("合成モード\n"..TXTblend[obj.track1+1])
+obj.draw(0,0,0, 0.8,1)
+obj.load("figure","四角形",col1,30)
+obj.effect("縁取り","サイズ",1,"color",0x121212)
+obj.draw(-90,-18)
+obj.load("tempbuffer")
+
+end
+end
+end
+
+
+------------------------------------------------------------------------------------------------------------------------
+@個別カラー
+------------------------------------------------------------------------------------------------------------------------
+--track0:Shift,0,1000,0
+--track1:リピート,-100,100,1,1
+--track2:強度,0,100,100
+--track3:blend,0,13,0,1
+--check0:レイヤーで色分け,0
+--dialog:col1(テーブル可)/col,local col1=0xff1c5c; col2/col,local col2=0xff546e; col3/col,local col3=0xd48b77;col4/col,local col4=0xbab382;col5/col,local col5=0xd6cc8b;Shift (option),local Shift2=0;強度 (option),local Amount2=0;
+
+local Shift   = obj.track0
+local Shift2  = Shift2 or 0
+ 
+ if tostring(Shift2)==Shift2 then 
+  local gv=obj.getvalue
+       Shift2 = math.sqrt ( (gv("layer"..Shift2..".x")-obj.ox)^2+(gv("layer"..Shift2..".y")-obj.oy)^2 + (gv("layer"..Shift2..".z")-obj.oz)^2 )/2
+ end
+      Shift   = Shift + math.abs(Shift2)
+local Repeat  = math.floor(obj.track1)
+local index   = obj.index+1
+ if Repeat==0 then  Repeat=obj.num end
+if(obj.check0) then index = obj.layer end
+      index   = math.ceil(index/Repeat)
+
+if Repeat<0 then 
+  index = math.ceil(rand(1,obj.num*100,Repeat,obj.index+1)/100) 
+ end
+local Amount  = obj.track2
+local Amount2 = Amount2 or 0
+      Amount  = Amount + Amount2
+local Blend   = math.floor(obj.track3)
+
+if string.find(tostring(col1),"table:") then
+ col1 = col1
+else
+ col1={col1}
+ if col2 then table.insert(col1,col2) end
+ if col3 then table.insert(col1,col3) end
+ if col4 then table.insert(col1,col4) end
+ if col5 then table.insert(col1,col5) end
+end
+
+ local function C_COL(t ,col0 ,col1)
+  local r0,g0,b0=RGB(col0)
+  local r1,g1,b1=RGB(col1)
+  local r = math.floor(r0 + (r1-r0) * t)
+  local g = math.floor(g0 + (g1-g0) * t)
+  local b = math.floor(b0 + (b1-b0) * t)
+  return RGB(r,g,b)
+ end
+
+local C=#col1
+local d,t=math.modf((Shift/100)*(C))
+local Current,Next=math.floor((index+d)%C+1),math.floor((index+1+d)%C+1)
+local current_col = C_COL(t,col1[Current],col1[Next])
+
+ if Blend<13 then
+  obj.effect("グラデーション","color",current_col,"color2",current_col,"強さ",Amount,"blend",Blend)
+ else
+  obj.effect("単色化","color",current_col,"輝度を保持する",1,"強さ",Amount)
+ end
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+@個別カラー(背景色同化)
+------------------------------------------------------------------------------------------------------------------------
+
+--track0:強度,0,100,100
+--track1:合成モード,0,13,0,1
+--track2:ブラー,-30,50,0,1
+
+--背景色で塗ります。但し既に描画された自分自身の色も取得してしまいます。
+
+local amount = obj.track0
+local blendmode = obj.track1
+local blur = obj.track2
+
+--obj.copybuffer("cache:org","obj")
+  obj.copybuffer("tmp","obj")
+if obj.index==0 then
+m_col={} 
+end
+local ZOOM=obj.getvalue("zoom")/100
+local w,h=obj.screen_w,obj.screen_h
+local x,y,z=obj.ox-obj.cx*ZOOM, obj.oy-obj.cy*ZOOM, obj.oz-obj.cz*ZOOM
+local rx,ry,rz=obj.rx,obj.ry,obj.rz
+local alpha,zoom=obj.alpha,obj.zoom
+local fx,fy=x+obj.x+w/2 ,y+obj.y+h/2
+local blur_abs=math.abs(blur)
+fx=math.max(1,math.min(w-1-blur_abs,fx))
+fy=math.max(1,math.min(h-1-blur_abs,fy))
+
+obj.load("framebuffer",fx,fy,blur_abs+1,blur_abs+1)
+--obj.ox,obj.oy,obj.oz=x,y,z
+obj.effect("ぼかし","範囲",blur,"サイズ固定",1)
+obj.effect("モザイク","サイズ",-blur)
+
+local pix=math.floor(blur_abs/2)
+local icolor=obj.getpixel(pix,pix)
+
+m_col[obj.index+1]=icolor
+--obj.copybuffer("obj","cache:org")
+obj.copybuffer("obj","tmp")
+
+obj.ox,obj.oy,obj.oz = x,y,z
+obj.rx,obj.ry,obj.rz = rx,ry,rz
+obj.alpha,obj.zoom   = alpha,zoom 
+
+
+if obj.track1==13 then
+obj.effect("単色化","強さ",amount,"color",icolor,"輝度を保持する",1)
+else
+obj.effect("グラデーション","blend",blendmode,"強さ",amount,"color",icolor, "color2",icolor)
+end
+
+

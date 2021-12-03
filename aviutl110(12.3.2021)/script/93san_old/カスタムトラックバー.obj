@@ -1,0 +1,286 @@
+--track0:TR.A,0,100,0,0.01
+--track1:TR.B,0,100,0,0.01
+--track2:TR.C,0,100,0,0.01
+--track3:TR.D,0,100,0,0.01
+--check0:変数のクリア,0
+--dialog:ｻｲｽﾞ[W/H/font],wh={220,20};A(範囲),ra={0,100};B,rb={0,100};C,rc={0,100};D,rd={-100,100};A(表示文字),ta='TrackA';B,tb='TrackB';C,tc='TrackC';D,td='TrackD';線色/col,c=0xffffff;font,f_="koruri";変数名,na="";色固定/chk,f_c=0;非表示/chk,iv=0;画像ｷｬｯｼｭ/chk,ci=0;
+
+local strfmt= "%.1f" 	--値の表示形式
+local tp = 70		--テキスト表示位置の広がり具合指定
+local bg_alpha = .05	--背景透明度
+
+local WH=wh
+local RA,RB,RC,RD=ra,rb,rc,rd
+local TA,TB,TC,TD=ta,tb,tc,td
+ra,rb,rc,rd=nil,nil,nil,nil
+ta,tb,tc,td=nil,nil,nil,nil
+local color=c or 0xffffff
+local font_=f_
+local name=na
+local f_col=f_c or 0
+local inv=iv or 0
+local cacheimg=ci or 0
+--[[
+
+ 解説動画向き？トラックバー表示オブジェクトです。またはスクリプト制御などに。
+ ゆうきさんのextbufferを使用します。
+
+トラックバーの右に表示される数値の範囲は設定ダイアログ「A(範囲) ～」で変更できます。  {最小値、最大値}
+
+トラックバー左に表示されるテキストは設定ダイアログ「A(表示文字) ～」で指定します。
+文字を直接入れる場合は  "テキスト"  のように " " もしくは  ' ' で囲うようにして下さい。
+長い文字だとあっという間にエラーになるのでご注意。
+(少し面倒ですが長い文字やその他数値用に変数を使いたいのであえてこの仕様です)
+
+ 	フォントやサイズは一括設定ですが、テキストオブジェクトと同様の制御文字を使って 個別に変更は可能です
+	 "<#ff0000>TRACK0"  とすれば赤い字でTRACK0と表示されます。
+ 	※フォントサイズを制御文字で変更する場合はフォント名を省略してしまうとフォントが一括設定から変わってしまいます。
+
+
+トラックバーの TR.A, TR.B, TR.C, TR.D はそのまま変数としてスクリプト制御などで利用できます。
+トラックバーの色も TR.col で出力します (4色のテーブルです)。
+
+また、変数固有名に何らかの文字を入れると変数を変更できます。複数同時に使う稀な用途
+
+例えば F と入れれば
+TR.A ⇒ TR.AF
+TR.B ⇒ TR.BF
+TR.C ⇒ TR.CF
+TR.D ⇒ TR.DF
+に変更されます。後ろに追加される形式です。
+
+画像キャッシュは現在のイメージPNGにして描画処理をカットします。(ただしトラックバーを弄っても画像が変わりません)
+
+
+]]
+
+
+
+if TR==nil then TR={} end
+local RTlocal={}
+
+local W,H =WH[1],WH[2]
+local fontsize = 20
+
+if #WH==3 then
+ fontsize = math.min(H*2,WH[3])
+end
+
+--obj.setfont("innervers gothic",34,0,0xffffff)
+    if font_=="0" then font_="innervers gothic"
+	elseif font_=="1" then font_="Intro Black Caps"
+	elseif font_=="2" then font_="Joost-Bold"
+	elseif font_=="3" then font_="Montserrat"
+	elseif font_=="4" then font_="ZonaPro"
+	elseif font_=="5" then font_="HelveticaNeueLT Com 97 BlkCn"
+	elseif font_=="6" then font_="Proxima nova Cn Bl"
+    end
+
+
+TA,TB,TC,TD = TA or "TRACKA",TB or "TRACKB",TC or "TRACKC",TD or "TRACKD"
+
+local tr = {obj.track0,obj.track1,obj.track2,obj.track3}
+local range ={RA,RB,RC,RD}
+local str = {TA,TB,TC,TD}
+
+local LINEAR = function(t, t_min, t_max, v1, v2, limit )
+   if not v1 then
+     v1 , v2 = 0, 1
+     limit = true
+   end
+   local c =(t_max - t_min)
+   local n = t/c - t_min/c
+   local V = v2-v1
+         V = V * n + v1
+    if not limit then
+       return V
+    else
+     if v1>v2 then v1,v2=v2,v1 end
+       V=math.max(v1,math.min(v2,V))
+       return V
+    end
+  end
+
+local num = 4
+
+local TRA ={"A","B","C","D"}
+for i=0,num-1 do
+	local rg=range[i+1]
+	local track = LINEAR(tr[i+1],0,100,rg[1],rg[2],"")
+	TR[TRA[i+1]..name] = track
+end
+
+
+
+----------------------------------------
+if inv==0 then
+
+
+
+local hsv = {34,-10,-10}
+local hr  = hsv[1] or 30
+local sr  = hsv[2] or 0
+local vr  = hsv[3] or 0
+local mode = 0
+
+if color==nil then
+  color = {0xd3f7e9,0xfcf3d2,0xfbcf86,0xfa7f46,0xdd4538}
+
+elseif not string.find(tostring(color),"table:") then
+
+  if color==0 then
+     color = {0xffffff,0x494949,0xffffff,0x494949}
+    mode = 1
+  elseif color==0xffffff then
+    color = {0x494949,0xffffff,0x494949,0xffffff}
+    mode = 1
+  elseif color<0 then
+    color = require("Mytools").Color80[-color%80+1] --{obj.getpixel(0,0)}
+    mode = 0
+  else
+
+     local t={}
+     local h,s,v = HSV(color)
+	for i=1,num  do
+		local h_ = (h - hr + (hr*2)/num*(i))%360
+		local s_ = math.max(0,math.min(100,(s  + (sr)/num*i)))
+		local v_ = math.max(0,math.min(100,(v  + (vr)/num*i)))
+ 	t[i] = HSV(h_ , s_,  v_ )
+	end
+    color = t
+ end
+end
+
+
+
+TR["col"..name] = color
+
+
+local DP=function(col,w,h,x,y, t,b,l,r,alpha)
+	local w,h=w/2,h/2
+	local x,y,t,b,l,r,alpha=x or 0,y or 0,t or 0,b or 0,l or 0,r or 0,alpha or 1
+	obj.load("figure","四角形",col,1)
+	local x0,y0,x1,y1,x2,y2,x3,y3
+	x0,y0=-w-l,-h-t
+	x1,y1= w+r,-h-t
+	x2,y2= w+r, h+b
+	x3,y3=-w-l, h+b
+	obj.drawpoly(x0+x,y0+y,0,x1+x,y1+y,0,x2+x,y2+y,0,x3+x,y3+y,0, 0,0, 0,0, 0,0, 0,0, alpha)
+      end
+
+local h,s,v = HSV(color[1])
+local tmpw,tmph = W*2+tp/2,H*num+20
+ tmpw=tmpw + tmpw%2
+ tmph=tmph + tmph%2
+
+
+	require("extbuffer")
+
+	local id = "img"..(obj.layer)
+	local extw,exth = extbuffer.size(id)
+
+if(cacheimg==1 and (extw+exth)==(tmpw+tmph))then   --チェックあり、かつextbufferサイズと仮想バッファサイズが一致していればキャッシュから画像を呼んで終わり
+	extbuffer.read(id )
+
+elseif(cacheimg==0 or extw==0)then --チェックなし もしくはextbufferサイズに変更があった場合は画像を作る
+	extbuffer.clear(id)
+
+
+obj.setoption("dst","tmp",tmpw,tmph)
+obj.setoption("blend",0)
+
+
+if f_col==1 then
+	DP(0x262626,tmpw,tmph ,0,0,0,0,0,0,1)
+else
+	DP(color[3],tmpw,tmph ,0,0,0,0,0,0,bg_alpha) -- BG
+end
+
+local bgcol    = color[1]
+local dotcol_a = color[1]
+local dotcol_b = color[2]
+local barcol_a = color[3]
+local barcol_b = color[4]
+
+
+local bar_bg,bar_top = 2,3
+ if  mode==1 then bar_bg,bar_top = 0,2  end
+ if WH[2]>20 then  bar_bg,bar_top = 1, 2 end
+
+for i=0,num-1 do
+	local rg=range[i+1]
+	--local track = LI(tr[i+1],0,100,rg[1],rg[2],"")
+	--TR[TRA[i+1]..name] = track
+	local track=TR[TRA[i+1]..name]
+	local H=i*H - H*3/2
+	local trk =track/(rg[2]-rg[1])*W
+	local fix=rg[1]/(rg[2]-rg[1])*W
+
+	local col = color[i%(#color)+1]
+ 	local col_track_bg = 0x141414
+	if f_col==0 then col_track_bg = HSV(h,s/1.5,math.max(15,v-v/2)) end
+
+	DP(col_track_bg ,W, bar_bg ,0, H,1,1,1,1,.3)			 --trackbar_bg
+	DP(col		,1, bar_top,-W/2-fix,H,0,0,0,trk,1)		 --trackbar
+
+
+	obj.load("figure","円",color[(i+1)%(#color)+1],math.min(20,WH[2])+2)	--dots_bg
+	obj.draw(-W/2+trk - fix ,H,0,.6,1,0,0,0)
+
+	local h,s,v=HSV(color[(i+2)%(#color)+1])		--dots
+	s = s * LINEAR(tr[i+1],0,100,.4,1)
+	obj.load("figure","円",HSV(h,s,v),math.min(20,WH[2]))
+	obj.draw(-W/2+trk -fix,H,0,.5,1,0,0,0)
+
+
+	local h,s,v=HSV(color[(i)%(#color)+1])			--text
+	 v = LINEAR(v,0,100,100,70)
+	 local colf = col_track_bg --HSV(h,s*.2,v)
+	 local colf2=colf
+	 local dec=0
+	if f_col==1 or mode==1 then
+	   colf = 0xffffff
+	   colf2 =0x141414
+	   dec=0
+	end
+	obj.setfont(font_, fontsize ,dec,colf,colf2)
+	obj.load(str[i+1])
+	obj.draw(-W/2-tp,H,0,.6,1,0,0,0)
+
+	obj.load(string.format(strfmt,track))			--value_text
+	obj.draw(W/2+tp,H,0,.6,1,0,0,0)
+
+end
+
+
+if name~="" then
+
+	obj.setfont(font_, fontsize ,0,color[2%(#color)+1])
+ 	obj.load(name)
+ 	local w,h=obj.getpixel()
+ 	obj.draw(tmpw/2-w/2-4,tmph/2-h/2-2,0,.7,.8)
+ 	obj.load("figure","円",color[1],w*2)
+ 	obj.draw(tmpw/2-w/2-4,tmph/2-h/2-2,0,.7,.2)
+
+end
+
+obj.copybuffer("obj","tmp")
+
+end
+
+
+		extbuffer.write(id) --キャッシュ
+	end
+
+
+---------------------------------
+
+
+ if(obj.check0)then
+	TR=nil
+	for i=1,100 do
+	 extbuffer.clear("img"..i)
+	end
+ end
+
+  if (obj.time==obj.totaltime) then extbuffer.clear(id) end

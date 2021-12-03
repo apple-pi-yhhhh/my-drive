@@ -1,0 +1,77 @@
+--track0:Blur,0,100,10,1
+--track1:色ずれ,0,100,0
+--track2:ずれﾀｲﾌﾟ,0,5,0,1
+--track3:ずれ幅,0,100,5,1
+--check0:速度表示,0
+--dialog:速度係数,local speed=100;
+
+-- 速度は B_T[obj.layer][obj.index].V で取り出せる
+
+if (speed==nil) then speed=100 end
+speed = speed*.01
+local blur   = obj.track0
+local cram   = obj.track1*.01
+local crtype = math.floor(obj.track2)
+local crw    = math.floor(obj.track3)
+local i,l,gv = obj.index,obj.layer,obj.getvalue
+local rate   = 1/obj.framerate
+local t      = math.max(0,obj.time-rate)
+
+if (B_T==nil) then
+   B_T={}
+   C_T={}
+end
+
+if (B_T[l]==nil) then
+  B_T[l]={}
+  C_T[l]={}
+end
+
+C_T[l][i] = obj.time
+
+if (B_T[l][i]==nil) then B_T[l][i] = {obj.ox, obj.oy, obj.oz, time = obj.time} end
+
+local v = B_T[l][i]
+local gap = (C_T[l][i] - v.time)/rate
+local gapABS = math.abs(gap)
+
+if (gapABS<1) then
+  gapABS = 1
+end
+
+-- if (gapABS>4) then
+--   gapABS = 4
+-- end
+
+-- --逆再生の場合は動作しない
+-- local chk = true -- (gap > 0)
+
+-- --コマ飛びが許容内かcheck
+-- local chk2 = true --(gap <= 2)
+
+-- if (chk and chk2) then
+
+  local vc = {gv("x")+obj.ox, gv("y")+obj.oy, gv("z")+obj.oz}
+  local vl = {gv("x",t)+v[1], gv("y",t)+v[2], gv("z",t)+v[3]}
+  local x,y,z=vl[1]-vc[1],vl[2]-vc[2],vl[3]-vc[3]
+  local V=math.sqrt( x*x + y*y ) / gapABS
+  V=V*speed
+  B_T[l][i] = {obj.ox, obj.oy, obj.oz, time = obj.time, V = V}
+
+  if (obj.check0) then
+    obj.setfont("",20,0)
+    obj.load(string.format("%.1f",V))
+    obj.effect("単色化","強さ",20*V,"color",HSV( math.max(0,240-(V*10)),100,100),"輝度を保持する",0)
+    obj.rz=0
+    obj.ox, obj.oy, obj.oz = unpack(B_T[l][i])
+  else
+    local r=90-obj.rz+math.deg(math.atan2(y,x))
+    local Blur = V  * blur*.1
+    Blur = math.min(Blur,blur*2)
+
+    obj.effect("方向ブラー","角度",r,"範囲", Blur )
+    obj.effect("色ずれ","type",crtype,"強さ",cram*V*20,"角度",r,"ずれ幅",crw * math.min(V/30,1) )
+
+  end
+
+-- end

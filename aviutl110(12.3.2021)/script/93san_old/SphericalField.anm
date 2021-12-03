@@ -1,0 +1,188 @@
+--[[
+
+個別オブジェクトなどを球状に押し出すエフェクトです。
+押し出す位置はレイヤーとアンカーポイントで指定します。
+
+◆トラックバー◆
+
+半径      >> フィールドの大きさです。
+
+強度      >> 100だと球状に貼り付きます。100を超えると吹き飛びます。マイナス吸い込みます。
+ 
+色        >> フィールドの範囲と強度に応じて色を付けます。マイナスで範囲が反転します。
+
+透明度    >> フィールドの範囲と強度に応じて透明度が変化します。マイナスで範囲が反転します。
+
+container >> フィールドの中に押し込むモードです。
+             フィールドを複数指定すると互いの範囲が被る部分が押し込み領域になります。
+             領域が被らない場合は最後に処理されるフィールドが最終的に優先されます。
+
+
+
+◆ダイアログ◆
+
+ﾌｨｰﾙﾄﾞﾚｲﾔ >> フィールドの位置をレイヤーで指定します。複数指定可能です。
+
+ｱﾝｶｰ数    >> 0以外にした場合フィールドの位置をアンカポイントで指定します。レイヤーと併用できます。
+             減らす場合は数を変更後アンカーポイントに触れて移動させる必要があります。
+	     マイナスの場合は拡大率に合わせてフィールドの位置も移動するようになります。
+
+ｱﾝｶｰ固定  >> アンカーの位置を画面原点からの座標に固定します。
+             オブジェクトを移動させた場合はアンカー表示と位置が合わなくなります。
+
+色        >> 着色カラーを指定、空欄だと強度に応じて色が変化します。
+
+拡大率    >> トラックバーの透明度と同様の動作です。空欄だと透明度と連動します。
+
+移動なし　>> 座標の移動をしなくなります。
+
+]]
+
+--track0:半径,0,5000,100
+--track1:強度,-200,200,100
+--track2:色,-100,100,100
+--track3:透明度,-100,100,0
+--check0:container,0
+--dialog:ﾌｨｰﾙﾄﾞﾚｲﾔ,layer={1};ｱﾝｶｰ数,anknum=1;ｱﾝｶｰ座標,pos={0,0,0};ｱﾝｶｰの固定/chk,lk=0;色/col,col=0xff0000;拡大率,zm=0;移動なし/chk,ret=0;
+
+-- local Field=require("SPfield")
+
+---------------------------------------------------------------------------
+
+local Field=function(pos,layer,radius,strength,container,ret)
+
+  local r,f,L = radius ,strength or 100,layer
+  f = f*.01
+  --f=math.max(-1,math.min(2, f))
+  local gv=obj.getvalue
+  local pos=pos or {obj.ox,obj.oy,obj.oz}
+  local ox,oy,oz = unpack(pos)
+  local xx,yy,zz = (ox+obj.x),(oy+obj.y),(oz+obj.z)
+  local x,y,z = 0,0,0
+
+  if string.find(tostring(L),"table:") then
+    x,y,z = unpack(L)
+  elseif (L == nil) then
+    return ox,oy,oz,0
+  else
+    L="layer"..L
+    x,y,z=gv(L..".x"),gv(L..".y"),gv(L..".z")
+    r = radius or gv(L..".zoom")*.5
+    if gv(L..".zoom")==nil then
+      return ox,oy,oz,0
+    end
+  end
+  r = r or 200
+
+  local xa,ya,za=xx-x,yy-y,zz-z
+  local xb,yb,zb=x-xx,y-yy,z-zz
+
+  if (r < 0) then
+    xa,ya,za,xb,yb,zb = xb,yb,zb,xa,ya,za
+  end
+
+  r = math.abs(r)
+  local l=(xa*xa + ya*ya + za*za)^.5
+  local nx,ny,nz = xb/l,yb/l,zb/l
+  local d = ( l<r and (1 - l/r) ) or 0
+  d = d*math.abs(f)
+
+if (container == 1) then
+  if (l > r) then
+    if (f < 0) then
+
+      ox = ox+(xa*d)*f
+      oy = oy+(ya*d)*f
+      oz = oz+(za*d)*f
+    else
+      f = f<1 and f or 1
+      ox = (xb-nx*r)*f + ox
+      oy = (yb-ny*r)*f + oy
+      oz = (zb-nz*r)*f + oz
+    end
+    if ret==nil or ret==0 then
+      -- obj.rz = obj.rz*(1-f) + f*(math.atan2(y-oy,x-ox)*180/math.pi-90+obj.rz)
+      obj.ox,obj.oy,obj.oz = ox,oy,oz
+    end
+  end
+  return ox,oy,oz,d
+
+else
+
+  if (l < r) then
+    if (f < 0 ) then
+      ox = (xa*d)*f + ox
+      oy = (ya*d)*f + oy
+      oz = (za*d)*f + oz
+    else
+      ox = (xb-nx*r)*f + ox
+      oy = (yb-ny*r)*f + oy
+      oz = (zb-nz*r)*f + oz
+    end
+    if ret == nil or ret == 0 then
+      -- obj.rz = obj.rz*(1-f)+ f*(math.atan2(y-oy,x-ox)*180/math.pi-90+obj.rz)
+      obj.ox,obj.oy,obj.oz = ox,oy,oz
+    end
+  end
+  return ox,oy,oz,d
+end
+
+end
+
+---------------------------------------------------------------------------
+
+local L={}
+local zoom=obj.getvalue("zoom")*.01
+local zom = (anknum < 0 and zoom) or 1
+pos = pos or {0,0,0}
+if (math.abs(anknum) > 0) then
+  anknum = math.max(1,math.abs(anknum))
+  obj.setanchor("pos",math.abs(anknum),"xyz")
+  local X,Y,Z=obj.x,obj.y,obj.z
+  if (lk == 1) then X,Y,Z=0,0,0 end
+  local LL=#L
+    for i=1,#pos/3 do
+      L[i+LL]={pos[i*3-2]*zom+X,pos[i*3-1]*zom+Y,pos[i*3]*zom+Z}
+    end
+end
+
+
+if not string.find(tostring(layer),"table:") then
+  L[#L+1]=layer
+else
+  local LL=#L
+  for i=1,#layer do
+   L[LL+i]=layer[i]
+  end
+end
+
+local d={}
+local x,y,z=obj.ox,obj.oy,obj.oz
+local radius   = obj.track0
+local strength = obj.track1
+if (obj.check0) then radius = math.abs(radius) end
+
+for i=1,#L do
+  x,y,z,d[i] = Field({x,y,z}, L[i],radius, strength ,(obj.check0 and 1) ,ret )
+end
+
+local a = math.max(unpack(d))
+local t2,t3=obj.track2,obj.track3*.01
+local alpha  = (t3>=0 and 1-(a*t3)) or  math.min(1,(1+a+t3))
+local amount = (t2>=0 and a*t2) or (t2<0 and (1-a)*-t2)
+
+if (zm == nil) then
+  zm = alpha
+else
+  zm = zm*.01
+  zm = (zm>=0 and 1-(a*zm)) or  math.min(1,(1+a+zm))
+end
+
+if (col == nil) then
+  col=HSV(200-300*(a),amount,100)
+end
+
+obj.effect("単色化","強さ",amount,"color",col,"輝度を保持する",0)
+obj.alpha = obj.alpha * alpha
+obj.zoom  = obj.zoom * zm
+
