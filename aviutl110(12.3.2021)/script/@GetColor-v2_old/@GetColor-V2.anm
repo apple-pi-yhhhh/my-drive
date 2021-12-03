@@ -1,0 +1,1780 @@
+
+
+-- これは間違って公開されていた古いものです
+
+
+-------------------------------------------------------
+@GCv2[Draw(Mein)]
+-------------------------------------------------------
+--track0:Size,0,100,10
+--track1:ScaleX,0,9000,100
+--track2:ScaleY,0,9000,100
+--track3:フォーム,0,400,0
+--check0:alpha二値,0;
+--dialog:分割数,dv={20,20,1};交互/chk,al=0;図形/fig,fg="円";図形ﾗｲﾝ,fl=1000;図形解像度,zoomd=100;回転ﾓｰﾄﾞ[0/2],rm=0;ｶﾒﾗ向き[0/3],bil=3;HSLAXYZR[0/8],mt=0;map方向,md=0;form影響度,ma=0;ﾗｲﾄ無効/chk,nolight=0;合成ﾓｰﾄﾞ,bl=0;透明塗り/col,local a2c=nil;alpha二値ﾀｲﾌﾟ/chk,local alpmode=0;
+local cc={}
+cc[1]={0xffc107,0xe1e1e1,0xff1158,0x453421,0x3e4f4a,0x6eb59e}
+cc[2]={0xffc107,0xe1e1e1,0xff1158,0x453421,0x451912}
+local size	 	= obj.track0
+local scale_x	= obj.track1*.01
+local scale_y	= obj.track2*.01
+local form	 	= obj.track3*.01
+local alpha_binarization = obj.check0
+local gv = obj.getvalue
+local outofix=1
+if outofix==1 then
+	obj.ox=obj.ox*(scale_x)
+	obj.oy=obj.oy*(scale_y)
+end
+-- 開発用にfalseを返すので無い場合だけ実行
+if not getcolortools then require("getcolortools") end
+local Tools = getcolortools
+local V 	= Tools.Vector
+local Linear = Tools.Linear
+local Tbl	= Tools.TBL
+local cam_param	= Tools.Camparam()
+local div, alternate = dv,al
+local fig,fig_l = fg,fl
+local rotmode,bil = rm or 0, bil or 0
+local mapt,mapd,map_am = mt or 0,md or 0, ma or 0
+local blend_dot = bl or 0
+map_am = map_am*.01
+mapt = Tbl(mapt,0)%9
+mapd = Tbl(mapd,0)%4
+if a2c then
+	a2c = { RGB(a2c) }
+end
+-- オプションのテーブルをローカルにコピー ---------------------------
+-- オプションがなければ初期値を作成
+GetColorOption =  GetColorOption or {}
+local OPT = {}
+OPT.scale 	= GetColorOption.scale or false
+OPT.twist 	= GetColorOption.twist or false
+OPT.pos		= GetColorOption.pos   or false
+OPT.shift 	= GetColorOption.shift or {scl=1,H=0,S=0,L=0,A=0}
+OPT.depth 	= GetColorOption.depth or {is_enabled = false,blur=0,lens=0,alpha=0}
+OPT.field 	= GetColorOption.field or {is_enabled = false}
+OPT.audio 	= GetColorOption.audio or false
+OPT.poly	= GetColorOption.poly  or false
+OPT.line	= GetColorOption.line  or false
+OPT.delay	= GetColorOption.delay or false
+-- ローカル化したらnil
+GetColorOption = nil
+
+-- オブジェクトの初期値を保存--------------------------------------
+local def = {
+	ox=obj.ox,oy=obj.oy,oz=obj.oz,
+	cx=obj.cx,cy=obj.cy,cz=obj.cz,
+	rx=obj.rx,ry=obj.ry,rz=obj.rz,
+	alpha	= obj.alpha,
+	aspact	= obj.aspect,
+	zoom	= obj.zoom,
+	grx=gv("rx"), gry=gv("ry"), grz=gv("rz"),
+	gzoom	= gv("zoom")/100,
+	galpha	= gv("alpha"),
+	gaspect	= gv("aspect")
+}
+
+-- 個別オブジェクトの回転 ---------------------------------------
+-- 中心点は座標に変換,obj.czはズームの影響を受けない
+local pos_o = {obj.ox,obj.oy,obj.oz}
+local pos_c = {-obj.cx*obj.getvalue("zoom")*.01,-obj.cy*obj.getvalue("zoom")*.01,-obj.cz}
+local pos_or = {Tools.Rot(pos_o)}
+local pos_cr = {Tools.Rot(pos_c)}
+
+-- ライトオブジェクトの認識 ---------------------------------------
+Makelight = Makelight or getcolortools.Makelight
+-- LightLayerはグローバルなので非アクティブなレイヤーのデータがあった場合は削除
+-- indexも1から始まらず飛び飛びな筈なのでローカルにして配列に並べ直す
+LightLayer = LightLayer or {}
+local light_array = {}
+local temp = LightLayer
+for k,v in pairs(LightLayer) do
+	if not obj.getvalue("layer"..k..".x") then
+		temp[k]=nil
+	else
+		table.insert(light_array,v)
+	end
+end
+LightLayer = temp
+if nolight==1 then
+	LightLayer={}
+	light_array={}
+end
+
+zoomd = Tbl(zoomd,100)
+zoomd = zoomd*.01
+local w,h = obj.getpixel()
+local pw,ph = w,h
+local aspect_wh = h/w
+if not tostring(div):find("table") then div={div} end
+local wn = div[1]
+local hn = div[2]
+if not div[2] or div[2]==0 then hn=div[1]*h/w end
+local zn = div[3] or 1
+local zd = div[4] or 100
+local dw,dh = w/wn, h/hn
+obj.copybuffer("tmp","obj")
+obj.effect()
+-- pixel情報の取得 col以外は正規化--------------------------------------
+local PIXEL = {}
+	for i=0,wn do
+		PIXEL[i+1]={}
+		for j=0,hn do
+			local x = (w-1)/wn*i
+			local y = (h-1)/hn*j
+			x = x - dw/4*(alternate*j%2) + dw/4*alternate*(1-j%2)
+			x = math.max(0,math.min(x,w-1))
+			local r,g,b,a = obj.getpixel(x,y,"rgb")
+			local a2 = a/255
+			if (alpha_binarization) then
+				a = a>0 and 255 or 0
+			end
+			local col = RGB(r,g,b)
+			local H,S,V = HSV(col)
+			r,g,b,a = r/255,g/255,b/255,a/255
+			if (a2c) and a==0 then
+					a = 1
+				r,g,b = a2c[1]/255,a2c[2]/255,a2c[3]/255
+			end
+			local L = (0.298912*r + 0.586611*g + 0.114477*b)
+			PIXEL[i+1][j+1]={
+				col=col,
+				r=r,
+				g=g,
+				b=b,
+				A=a,
+				A2=a2,
+				L=L,
+				H=H/360,
+				S=S/100,
+				V=V/100
+			}
+		end
+	end
+-- データを入れるテーブルを用意
+local POSdraw = {}
+local POSface = {}
+local POSline = {pos={},col={},alpha={}}
+if not FaceM then FaceM={} end
+if (obj.index==0) then
+	FaceM = {}
+end
+FaceM[obj.index+1]={}
+local count=1
+
+-- n=n%1の余剰関数(1以上で小数部がなければ1)
+-- Hueのみ0==360(0==1) なのでH%1で問題なし
+local Fm = function(i)
+	local dec = i%1
+	if i<1 then
+		return dec
+	elseif dec==0 then
+		return 1
+	else
+		return dec
+	end
+end
+
+local Clamp = function(v)
+	return math.max(0,math.min(1,v))
+end
+-- 座標の生成(描画はしない) /////////////////////////////////////
+local fix=0
+if form>=2 then fix=1 end
+for i=0,wn do
+	POSdraw[i+1]={}
+	POSface[i+1]={}
+	FaceM[obj.index+1][i+1]={}
+	for j=0,hn do
+		POSdraw[i+1][j+1] = {}
+		POSface[i+1][j+1] = {}
+		FaceM[obj.index+1][i+1][j+1]={}
+		for k=0,zn-1 do
+			count = count + 1
+			--ランダム
+			local RND = {}
+				RND = {
+					x = obj.rand(-100,100,seed or i,count+1000)*.01,
+					y = obj.rand(-100,100,seed or j,count+2000)*.01,
+					z = obj.rand(-100,100,seed or k,count+3000)*.01
+				}
+				RND = {
+					x = RND.x * RND.y,
+					y = RND.y * RND.z,
+					z = RND.z * RND.x
+				}
+
+			-- カラーの動作 MAP[maptype(LHSA)][mapdiretion]
+			local MAP = {}
+			local pixel = PIXEL[i+1][j+1]
+
+			local frec = OPT.shift.frec or 1
+			local phase = OPT.shift.phase or 0
+			local H = (pixel.H + OPT.shift.H)
+			local S = (pixel.S + OPT.shift.S)
+			local L = (pixel.L + OPT.shift.L)
+			local A = (pixel.A + OPT.shift.A)
+			if (alpmode==1) then A = (pixel.A2 + OPT.shift.A) end
+			local I = (i/wn + (OPT.shift.I or 0))
+			local J = (j/hn + (OPT.shift.J or 0))
+			local K = (1+k/zn + (OPT.shift.K or 0))
+			local R = ((RND.x+RND.y+RND.z)/3 + (OPT.shift.r or 0))
+			if not OPT.shift.invert then
+				MAP = {
+					[0] = {[0]=1,1,1,1},
+					[1] = {[0]=(H%1), ((H%1)-.5)*2, math.sin(H*math.pi*frec+phase),math.cos(H*math.pi*frec+phase)},
+					[2] = {[0]=Fm(S), (Fm(S)-.5)*2, math.sin(S*math.pi*frec+phase),math.cos(S*math.pi*frec+phase)},
+					[3] = {[0]=Fm(L), (Fm(L)-.5)*2, math.sin(L*math.pi*frec+phase),math.cos(L*math.pi*frec+phase)},
+					[4] = {[0]=Fm(A), (Fm(A)-.5)*2, math.sin(A*math.pi*frec+phase),math.cos(A*math.pi*frec+phase)},
+					[5] = {[0]=Fm(I), (Fm(I)-.5)*2, math.sin(I*math.pi*frec+phase),math.cos(I*math.pi*frec+phase)},
+					[6] = {[0]=Fm(J), (Fm(J)-.5)*2, math.sin(J*math.pi*frec+phase),math.cos(J*math.pi*frec+phase)},
+					[7] = {[0]=Fm(K), (Fm(K)-.5)*2, math.sin(K*math.pi*frec+phase),math.cos(K*math.pi*frec+phase)},
+					[8] = {[0]=Fm((1+R)/2),R, math.sin(R*math.pi*frec+phase),math.cos(R*math.pi*frec+phase)}
+				}
+			else
+				MAP = {
+					[0] = {[0]=1,1,1,1},
+					[1] = {[0]=(1-H%1), ((1-H%1)-.5)*2, math.sin(1-H*math.pi),math.cos(1-H*math.pi)},
+					[2] = {[0]=1-Fm(S), (1-Fm(S)-.5)*2, math.sin((1-S*math.pi)*frec+phase),math.cos((1-S*math.pi)*frec+phase)},
+					[3] = {[0]=1-Fm(L), (1-Fm(L)-.5)*2, math.sin((1-L*math.pi)*frec+phase),math.cos((1-L*math.pi)*frec+phase)},
+					[4] = {[0]=1-Fm(A), (1-Fm(A)-.5)*2, math.sin((1-A*math.pi)*frec+phase),math.cos((1-A*math.pi)*frec+phase)},
+					[5] = {[0]=1-Fm(I), (1-Fm(I)-.5)*2, math.sin((1-I*math.pi)*frec+phase),math.cos((1-I*math.pi)*frec+phase)},
+					[6] = {[0]=1-Fm(J), (1-Fm(J)-.5)*2, math.sin((1-J*math.pi)*frec+phase),math.cos((1-J*math.pi)*frec+phase)},
+					[7] = {[0]=1-Fm(K), (1-Fm(K)-.5)*2, math.sin((1-K*math.pi)*frec+phase),math.cos((1-K*math.pi)*frec+phase)},
+					[8] = {[0]=Fm(1-(1+R)/2),1-R, math.sin((1-R*math.pi)*frec+phase),math.cos((1*frec+phase-R*math.pi)*frec+phase)}
+				}
+			end
+			-- 描画の基本座標生成
+			local pos = {}
+				local x = (i*dw-w/2) --+ dw/2
+				local y = (j*dh-h/2) --+ dh/2
+				local z = k*zd - (zn-1)/2*zd
+				x = x - dw/4*(alternate*j%2) + dw/4*alternate*(1-j%2)
+				pos = {x*scale_x, y*scale_y, z}
+				-- form変化
+				local map_f = 1-map_am + MAP[mapt][mapd]*map_am
+				if (form>0) and (form<2) then
+					local radius = (scale_x*w/4 * (1+zn-k)) * map_f
+					local pos0 = {
+						math.cos(math.pi*2/(wn)*i + math.pi/2) * radius,
+						h/hn*j*scale_y - h/2*scale_y,
+						math.sin(math.pi*2/(wn)*i + math.pi/2) * radius
+					}
+					pos = Tools.Swap_table(form,pos,pos0)
+				end
+				if (form>1) and (form<3) then
+					local radius = w/4 * (1+zn-k) * map_f
+					pos0 = {Tools.Co_spherical(radius, -math.pi*2/(wn)*i - math.pi , -math.pi/(hn)*j  ) }
+					pos0[1] = pos0[1]*scale_x
+					pos0[2] = pos0[2]*scale_y
+					pos0[3] = pos0[3]*scale_x
+					pos = Tools.Swap_table(form-1,pos,pos0)
+				end
+				if (form>2) and (form<4) then
+					local radius = scale_x*w/4*(1+k) * map_f
+					local radius2 = scale_y/4*100
+					local pos0 = {Tools.Co_torus(radius,radius2, math.pi*2/(hn-1)*j + math.pi/2*0 , math.pi*2/(wn)*i)}
+					pos = Tools.Swap_table(form-2,pos,pos0)
+				end
+				if (form>3) and (form<5) then
+					local radius  = scale_x*w/4
+					local radius2 = scale_y/4*100*(1+k) * map_f
+					local pos0 = {Tools.Co_torus(radius,radius2, -math.pi*2/(hn-1)*j + math.pi/2 , math.pi*2/(wn)*i)}
+					pos = Tools.Swap_table(form-3,pos,pos0)
+				end
+
+			-- -- オプション position ---------------------------------------
+			local POSITION = {0,0,0}
+			if (OPT.pos) then
+				local map  = OPT.pos.map
+				local mapd = OPT.pos.mapd
+				local rnd = OPT.pos.rnd or {1,1,1}
+				local map_px = MAP[map.x][mapd.x]
+				local map_py = MAP[map.y][mapd.y]
+				local map_pz = MAP[map.z][mapd.z]
+				local map_rnd = MAP[map.rnd][mapd.rnd]
+				local bias = OPT.pos.bias
+				POSITION = {
+					OPT.pos.x * map_px + (RND.x+bias)*OPT.pos.random*map_rnd*rnd[1],
+					OPT.pos.y * map_py + (RND.y+bias)*OPT.pos.random*map_rnd*rnd[2],
+					OPT.pos.z * map_pz + (RND.z+bias)*OPT.pos.random*map_rnd*rnd[3]
+				}
+				if (OPT.pos.is_befor) then
+					pos = V.Add(pos,POSITION)
+					POSITION = {0,0,0}
+				end
+			end
+
+			-- オプション twist  --------------------------------------
+			local TWIST = {0,0,0}
+			local twrand = 0
+			if (OPT.twist) then
+				local map=OPT.twist.map
+				local mapd=OPT.twist.mapd
+				local I,J = i,j
+				local WN,HN = wn,hn
+				local map_tx = MAP[map.x][mapd.x]
+				local map_ty = MAP[map.y][mapd.y]
+				local map_tz = MAP[map.z][mapd.z]
+				local map_rnd = MAP[map.rnd][mapd.rnd]
+				local rnd = OPT.twist.rnd or {1,1,1}
+				local t_scl = OPT.twist.scale
+				local t_anc = OPT.twist.anc
+				local time = OPT.twist.time
+				local ax,ay=0,0
+				local affect = 1
+				twrand = OPT.twist.random
+				if (OPT.twist.ancmode==0) then
+					ax = Linear(t_anc[1],0,w/2,0,math.pi*2,1)
+					ay = Linear(t_anc[2],0,h/2,0,math.pi*2,1)
+				else
+					local rad = OPT.twist.radius or 300
+					local center = V.Sub(pos,V.Sub(t_anc,{obj.ox,obj.oy,obj.oz}))
+					local len = V.Length(center)
+					affect = Linear(len,0,rad,1,0)^2
+					I,J = affect,affect
+					WN,HN = 1,1--I+rad,J+rad
+				end
+				if OPT.twist.mode==0 then
+					TWIST = {
+						math.cos( Linear(I,0+ax,WN+ax, 0,math.pi*2 * t_scl)+time.x ) * OPT.twist.x * map_tx,
+						math.cos( Linear(J,0+ay,HN+ay, 0,math.pi*2 * t_scl)+time.y ) * OPT.twist.y * map_ty,
+						math.cos( Linear(I,0+ax,WN+ax, 0,math.pi*2 * t_scl)+time.z ) * OPT.twist.z * map_tz
+					}
+				elseif OPT.twist.mode==1 then
+					TWIST = {
+						math.cos( Linear(J,0+ay,HN+ay, 0,math.pi*1 * t_scl)+time.x ) * OPT.twist.x * map_tx,
+						math.cos( Linear(I,0+ax,WN+ax, 0,math.pi*1 * t_scl)+time.y ) * OPT.twist.y * map_ty,
+						math.cos( Linear(J,0+ax,HN+ax, 0,math.pi*1 * t_scl)+time.z ) * OPT.twist.z * map_tz
+					}
+				elseif OPT.twist.mode==2 then
+					TWIST = {
+						math.sin( Linear(J,0+ay,HN+ay, 0,math.pi*1 * t_scl)+time.x ) * OPT.twist.x * map_tx,
+						math.sin( Linear(I,0+ax,WN+ax, 0,math.pi*1 * t_scl)+time.y ) * OPT.twist.y * map_ty,
+						math.sin( Linear(I,0+ax,WN+ax, 0,math.pi*1 * t_scl)+time.z ) * OPT.twist.z * map_tz
+					}
+				elseif OPT.twist.mode>2 then
+					TWIST = {
+						math.cos( Linear(J,0+ay,HN+ay, 0,math.pi*2 * t_scl)+time.x ) * OPT.twist.x * map_tx,
+						math.sin( Linear(I,0+ax,WN+ax, 0,math.pi*2 * t_scl)+time.y ) * OPT.twist.y * map_ty,
+						math.cos( Linear(I,0+ax,WN+ax, 0,math.pi*2 * t_scl)+time.z ) * OPT.twist.z * map_tz
+					}
+				end
+				TWIST = {
+					(TWIST[1] + (RND.x)*OPT.twist.random*map_rnd*rnd[1]) * affect,
+					(TWIST[2] + (RND.y)*OPT.twist.random*map_rnd*rnd[2]) * affect,
+					(TWIST[3] + (RND.z)*OPT.twist.random*map_rnd*rnd[3]) * affect
+				}
+				-- 座標に反映
+				pos = { Tools.Rot(pos,TWIST) }
+			end
+			-- オプション Scale  --------------------------------------
+			local SCALE = {1,1,1}
+			if (OPT.scale) then
+				local map_sx = MAP[OPT.scale.map.x][OPT.scale.mapd.x]
+				local map_sy = MAP[OPT.scale.map.y][OPT.scale.mapd.y]
+				local map_sz = MAP[OPT.scale.map.z][OPT.scale.mapd.z]
+				local map_rnd = MAP[(OPT.scale.map.rnd or 0)][(OPT.scale.mapd.rnd or 0)]
+				local bias = OPT.scale.bias
+				 SCALE = {
+					1+OPT.scale.x * map_sx + (RND.x+bias) * OPT.scale.random*map_rnd,
+					1+OPT.scale.y * map_sy + (RND.y+bias) * OPT.scale.random*map_rnd,
+					1+OPT.scale.z * map_sz + (RND.z+bias) * OPT.scale.random*map_rnd
+				}
+				pos = V.Mul(pos,SCALE)
+			end
+
+			pos = V.Add(pos,POSITION)
+
+			-- ディレイ
+			if (OPT.delay) then
+				OPT.delay.funcr({obj.rx,obj.ry,obj.rz},wn,hn,i,j,count,MAP)
+			end
+
+			-- 差票をトラックバーで回転させる
+			if (rotmode==1) then
+				-- グループ回転
+				-- 全要素を加算してから回転
+				pos = V.Add(pos,pos_o)
+				pos = V.Add(pos,pos_c)
+				pos = {Tools.Rot(pos)}
+			elseif (rotmode==2) then
+				-- 相対座標成分のみを回転してから加算
+				local pos_or = {Tools.Rot(pos_o)}
+				local pos_cr = {Tools.Rot(pos_c)}
+				pos = V.Add(pos,pos_or)
+				pos = V.Add(pos,pos_cr)
+			else
+				-- 生成した座標を回転
+				pos = {Tools.Rot(pos)}
+				-- 予め回転させておいた中心点成分
+				pos = V.Add(pos,pos_cr)
+				-- 素の相対座標成分を加算
+				pos = V.Add(pos,pos_o)
+			end
+
+			if (OPT.delay) then
+				pos = OPT.delay.func(pos,wn,hn,i,j,count,MAP)
+			end
+			local alpha = obj.alpha * pixel.A
+			local r,g,b = pixel.r,pixel.g,pixel.b
+			local zoom = 1
+			--オプション field  --------------------------------------
+				local FIELD = 0
+				if OPT.field.is_enabled then
+					local f = OPT.field
+					local am = f.col_am
+					local v = 0
+					local tmp = pos
+					for i=1,#f.layer do
+						tmp,v = f.func(tmp,f.layer[i],f.radius[i],f.strength,f.mode)
+						FIELD = (v > FIELD) and v or FIELD
+					end
+					FIELD = Linear(FIELD,min_dst or 0,max_dist or 1,0,1)
+					am = FIELD*am
+					r = pixel.r*(1-am) + f.col.r * (am)
+					g = pixel.g*(1-am) + f.col.g * (am)
+					b = pixel.b*(1-am) + f.col.b * (am)
+					-- pos[1] = tmp[1]+tmp[1]*(RND.x+1)*f.rnd[1]*FIELD
+					-- pos[2] = tmp[2]+tmp[2]*(RND.y+1)*f.rnd[2]*FIELD
+					-- pos[3] = tmp[3]+tmp[3]*(RND.z+1)*f.rnd[3]*FIELD
+					pos[1] = tmp[1]+(RND.x)*f.rnd[1]*FIELD
+					pos[2] = tmp[2]+(RND.y)*f.rnd[2]*FIELD
+					pos[3] = tmp[3]+(RND.z)*f.rnd[3]*FIELD
+					zoom = zoom + f.zoom*FIELD
+					zoom = math.max(0,zoom)
+					local alp = 1
+					if f.alpha>0 then
+						alp = 1-(FIELD*f.alpha)
+					elseif f.alpha<0 then
+						alp = FIELD+(1+f.alpha)
+					end
+					alpha = Clamp(alpha*alp)
+				end
+
+			-- オプション Depth (数値のみ) -----------------------------
+			local depth = {1,1,range=1}
+			if OPT.depth.is_enabled and OPT.depth.beforelight then
+				 depth = OPT.depth.func(pos,OPT.depth.param)
+				 if (OPT.depth.alpha==1) then
+					 alpha = alpha * depth[1]
+				 end
+				 if (OPT.depth.fog>0) then
+					 local am = (1-depth[1])*OPT.depth.fog
+					if (depth.range>0) then
+					 	r = pixel.r*(1-am) + OPT.depth.farcolor.r * (am)
+					 	g = pixel.g*(1-am) + OPT.depth.farcolor.g * (am)
+					 	b = pixel.b*(1-am) + OPT.depth.farcolor.b * (am)
+					else
+						r = pixel.r*(1-am) + OPT.depth.nearcolor.r * (am)
+						g = pixel.g*(1-am) + OPT.depth.nearcolor.g * (am)
+						b = pixel.b*(1-am) + OPT.depth.nearcolor.b * (am)
+					end
+				 end
+			end
+
+			-- ライト(簡易) -----------------------------
+			if (#light_array>0) and (alpha>0) then
+				local ir,ig,ib = r,g,b
+				local ambientcol = {r=0,g=0,b=0}
+				local ambient = 0
+				local diffuse = 1
+				local R,G,B = pixel.r,pixel.g,pixel.b
+				if (OPT.poly) then
+					ambientcol  = OPT.poly.ref.ambientcol
+					ambient		= OPT.poly.ref.ambient
+					diffuse 	= OPT.poly.ref.diffuse
+				end
+				R = R * ambientcol.r*ambient
+				G = G * ambientcol.g*ambient
+				B = B * ambientcol.b*ambient
+				-- 他のレイヤーオブジェクトと比較するので基準座標が必要
+				local P = V.Add(pos,{obj.x,obj.y,obj.z})
+				for k,light in ipairs(light_array) do
+					local l=0
+					if light.parallel==1 then
+						l = V.Dist_p_line(P,light.line.a,light.line.b)
+					else
+						l = V.Length(V.Sub(P,light.pos))
+					end
+					local radius = light.radius or 0
+					l = Linear(l, radius, radius+light.distance ,1,0)^2
+					R = R + ir*light.r*light.intensity * l * diffuse
+					G = G + ig*light.g*light.intensity * l * diffuse
+					B = B + ib*light.b*light.intensity * l * diffuse
+					r = R > 1 and 1 or R
+					g = G > 1 and 1 or G
+					b = B > 1 and 1 or B
+				end
+			end
+
+			if OPT.depth.is_enabled then
+				--local r,g,b=r,g,b
+				 depth = OPT.depth.func(pos,OPT.depth.param)
+				 if (OPT.depth.alpha==1) then
+					 alpha = alpha * depth[1]
+				 end
+				 if (OPT.depth.fog>0) then
+					 local am = (1-depth[1])*OPT.depth.fog
+					if (depth.range>0) then
+					 	r = r*(1-am) + OPT.depth.farcolor.r * (am)
+					 	g = g*(1-am) + OPT.depth.farcolor.g * (am)
+					 	b = b*(1-am) + OPT.depth.farcolor.b * (am)
+					else
+						r = r*(1-am) + OPT.depth.nearcolor.r * (am)
+						g = g*(1-am) + OPT.depth.nearcolor.g * (am)
+						b = b*(1-am) + OPT.depth.nearcolor.b * (am)
+					end
+				 end
+			end
+			r = Clamp(r)
+			g = Clamp(g)
+			b = Clamp(b)
+			local alphaselector = {alpha,H,S,L}
+			local color = RGB(r*255,g*255,b*255)
+			POSdraw[i+1][j+1][k+1] = {pos=pos, col=color,rgb={r=r,g=g,b=b,a=alpha},alpha=alpha,zoom=zoom,depth=depth,MAP=MAP,RND=RND,FIELD=FIELD}
+			POSface[i+1][j+1][k+1] = { pos[1]+obj.ox+obj.x, pos[2]+obj.oy+obj.y, pos[3]+obj.oz+obj.z, pixel.r*255, pixel.g*255, pixel.b*255, depth[1], pixel.L*255 }
+			FaceM[obj.index+1][i+1][j+1][k+1] = { pos[1], pos[2], pos[3], pixel.r*255, pixel.g*255, pixel.b*255, depth[1], pixel.L*255 }
+			-- POSdraw[k+1][i+1][j+1] = {pos=pos, col=color,rgb={r=r,g=g,b=b,a=alpha}, alpha=alpha,MAP=MAP,depth=depth,RND=RND}
+			-- POSface[k+1][i+1][j+1] = { pos[1]+obj.ox+obj.x, pos[2]+obj.oy+obj.y, pos[3]+obj.oz+obj.z, pixel.r*255, pixel.g*255, pixel.b*255, depth[1], pixel.L*255 }
+			-- FaceM[obj.index+1][k+1][i+1][j+1] = { pos[1], pos[2], pos[3], pixel.r*255, pixel.g*255, pixel.b*255, depth[1], pixel.L*255 }
+			if pixel.A>0 then
+				-- table.insert(POSline.pos,pos);table.insert(POSline.col,color);table.insert(POSline.alpha,alpha)
+				table.insert(POSline,{pos=pos,col=color,alpha=alpha})
+			end
+		end
+	end
+end
+
+def.ox=obj.ox; def.oy=obj.oy; def.oz=obj.oz;
+def.cx=obj.cx; def.cy=obj.cy; def.cz=obj.cz;
+def.rx=obj.rx; def.ry=obj.ry; def.rz=obj.rz;
+-- 外部出力 ///////////////////////////////////////////////////
+if (form>=1) and (form<3) then
+	 table.insert(POSface,POSface[1])
+end
+GC = GC or {}
+GC.face = POSface
+GC.pos = {}
+for i=1,#POSline do
+	GC.pos[i]=POSline[i].pos
+end
+
+-- 描画 ///////////////////////////////////////////////////
+-- 面 -----------------------------------------------------
+obj.setoption("billboard",0)
+if  (OPT.poly) then  --(OPT.poly)
+	local opacity 	= OPT.poly.opacity
+	local ref 		= OPT.poly.ref
+	local reflect 	= OPT.poly.reflect
+	local tri 		= OPT.poly.tri or 0
+	local colfade 	= OPT.poly.colfade or 0
+	local XY 		= OPT.poly.XY or 1
+	local YZ 		= OPT.poly.YZ or 0
+	local ZX 		= OPT.poly.ZX or 0
+	local vanish 	= OPT.poly.vanish or 200
+	local fade 		= OPT.poly.fade or 100
+	local F_shader  = OPT.poly.func.F_shader
+
+	-- 頂点の組み合わせの最大距離 (消滅用)
+	local Maxlen = function(a,b,c,d)
+	    local v
+	    if d then
+	        v=math.max(V.Lensq(a,b),V.Lensq(b,c),V.Lensq(c,d),V.Lensq(d,a))
+	    else
+	        v=math.max(V.Lensq(a,b),V.Lensq(b,c),V.Lensq(c,a))
+	    end
+	    return math.sqrt(v)
+	end
+
+	local My_drawpoly = function(a,b,c,d,uv,alpha)
+		local x0,y0,z0 = a[1],a[2],a[3] or 0
+		local x1,y1,z1 = b[1],b[2],b[3] or 0
+		local x2,y2,z2 = c[1],c[2],c[3] or 0
+		local x3,y3,z3 = d[1],d[2],d[3] or 0
+		if uv==0 then
+			local al=obj.alpha
+			obj.alpha = alpha
+			obj.drawpoly(x0,y0,z0 ,x1,y1,z1 ,x2,y2,z2 ,x3,y3,z3)
+			obj.alpha=al
+			return
+		end
+		uv = uv or {0,0, 0,0, 0,0, 0,0}
+		u0,v0,u1,v1,u2,v2,u3,v3 = uv[1],uv[2],uv[3],uv[4],uv[5],uv[6],uv[7],uv[8]
+		obj.drawpoly(x0,y0,z0 ,x1,y1,z1 ,x2,y2,z2 ,x3,y3,z3 ,u0,v0,u1,v1,u2,v2,u3,v3 ,alpha or 1)
+	end
+
+	-- local uv0 = {0,0, 1,0, 1,1, 0,1}
+	-- local uv1 = {1,0, 2,0, 2,1, 1,1}
+	-- local uv2 = {1,1, 2,1, 2,2, 1,2}
+	-- local uv3 = {0,1, 1,1, 1,2, 0,2}
+	obj.load("figure","四角形",0x000000,2)
+	-- loadをすると初期化時アンカーとラックバーの値が代入されるのでキャンセルする
+	obj.rx,obj.ry,obj.rz=0,0,0
+	obj.cx,obj.cy,obj.cz=0,0,0
+	obj.alpha = obj.alpha * opacity
+	local uv0= colfade==1 and {0,0,0,0,2,0,2,2} or {0,0,0,0,0,0,0,0}
+	local uv1= colfade==1 and {0,0,0,0,2,2,0,2} or {0,0,0,0,0,0,0,0}
+	local uv2= colfade==1 and {0,0,0,0,2,0,0,2} or {0,0,0,0,0,0,0,0}
+	local uv3= colfade==1 and {2,0,2,0,2,2,0,2} or {0,0,0,0,0,0,0,0}
+	local uv4= colfade==1 and 0 or {0,0,0,0,0,0,0,0}
+	obj.setoption("blend",OPT.poly.blend or 0,OPT.poly.force)
+	if (#light_array==0) or (reflect==false) and (opacity>0) then
+		for i=1,#POSdraw-1 do
+			for j=1,#POSdraw[i]-1 do
+				for k=1,#POSdraw[i][j] do
+					local p0 = POSdraw[i][j][k]
+					local p1 = POSdraw[i+1][j][k]
+					local p2 = POSdraw[i+1][j+1][k]
+					local p3 = POSdraw[i][j+1][k]
+					local max = Maxlen(p0.pos,p1.pos,p2.pos,p3.pos)
+					local vanish = Linear(max,vanish,fade,1,0) * opacity
+					local col0,col1,col2,col3 = p0.col,p1.col,p2.col,p3.col
+					local alp0,alp1,alp2,alp3 = p0.alpha,p1.alpha,p2.alpha,p3.alpha
+					obj.putpixel(0,0,col0,1)
+					obj.putpixel(1,0,col1,1)
+					obj.putpixel(1,1,col2,1)
+					obj.putpixel(0,1,col3,1)
+					if (tri==0) then
+						My_drawpoly(p0.pos,p1.pos,p2.pos,p3.pos,uv4,alp0*alp1*alp2*alp3 * vanish)
+					else
+						if j%2==0 then
+							My_drawpoly(p0.pos,p0.pos,p1.pos,p2.pos,uv0,alp0*alp1*alp2 * vanish)
+							My_drawpoly(p0.pos,p0.pos,p2.pos,p3.pos,uv1,alp0*alp2*alp3 * vanish)
+						else
+							My_drawpoly(p0.pos,p0.pos,p1.pos,p3.pos,uv2,alp0*alp1*alp3 * vanish)
+							My_drawpoly(p1.pos,p1.pos,p2.pos,p3.pos,uv3,alp1*alp2*alp3 * vanish)
+						end
+					end
+
+				end
+			end
+		end
+	elseif (#light_array>0) and (reflect) then
+		OPT.poly.func.Facets(POSdraw,colfade,light_array,cam_param,vanish,fade,tri,ref,XY,ZX,YZ)
+	end
+end
+-- Facets.XYZ(POSface,0xffffff,1)
+-- 線 ------------------------------------------------------
+if (OPT.line) then
+	local Draw_line3D2=Tools.Draw_line3D2
+	local line = OPT.line
+	obj.load("figure","四角形",0xffffff,2)
+	obj.rx,obj.ry,obj.rz=0,0,0
+	obj.cx,obj.cy,obj.cz=0,0,0
+	local mode 		= line.mode or 0
+	local width		= line.width or 1
+	local line_col  = line.line_col
+	local alpha		= line.alpha or 1
+	local startfade	= line.startfade or 1
+	local vanish	= line.vanish or 100
+	local progress	= line.progress or 1
+	local maxnum	= line.maxnum or 1
+	local colorfade = line.colorfade or 0
+	local shuffle 	= line.shuffle or 0
+	local blend 	= line.blend or 0
+	obj.setoption("blend",blend,(blend~=0 and "force") or 0)
+	-- local maxnum 	= OPT.line.maxnum or 1
+	if (mode==0) or (mode==3) or (mode==4) then
+		for i=1,#POSdraw-1 do
+			for j=1,#POSdraw[i]-1 do
+				for k=0,#POSdraw[i][j]-1 do
+					local p0 = POSdraw[i][j][k+1]
+					local p1 = POSdraw[i+1][j][k+1]
+					local p2 = POSdraw[i+1][j+1][k+1]
+					local p3 = POSdraw[i][j+1][k+1]
+					local c0,c1,c2,c3 = p0.col,p1.col,p2.col,p3.col
+
+					if (colorfade==1) then
+						if j%2==0 then
+							Draw_line3D2(p1.pos,p0.pos, width, c1,c0, p1.alpha*alpha, p0.alpha*alpha, startfade,vanish,nil,nil,progress)
+							Draw_line3D2(p2.pos,p1.pos, width, c2,c1, p2.alpha*alpha, p1.alpha*alpha, startfade,vanish,nil,nil,progress)
+							Draw_line3D2(p0.pos,p2.pos, width, c0,c2, p0.alpha*alpha, p2.alpha*alpha, startfade,vanish,nil,nil,progress)
+						else
+							Draw_line3D2(p0.pos,p1.pos, width, c0,c1, p0.alpha*alpha, p1.alpha*alpha, startfade,vanish,nil,nil,progress)
+							Draw_line3D2(p1.pos,p2.pos, width, c1,c2, p1.alpha*alpha, p2.alpha*alpha, startfade,vanish,nil,nil,progress)
+							Draw_line3D2(p3.pos,p1.pos, width, c3,c1, p3.alpha*alpha, p1.alpha*alpha, startfade,vanish,nil,nil,progress)
+						end
+						if i==1 then
+							Tools.Draw_line3D2(p0.pos,p3.pos, width, c0,c3, p0.alpha*alpha, p3.alpha*alpha, startfade,vanish,nil,nil,progress)
+						end
+						if j==#POSdraw[i]-1 then
+							Tools.Draw_line3D2(p3.pos,p2.pos, width, c3,c2, p3.alpha*alpha, p2.alpha*alpha, startfade,vanish,nil,nil,progress)
+						end
+					else
+						if j%2==0 then
+							Draw_line3D2(p1.pos,p0.pos, width, c0,c0, p0.alpha*p1.alpha*alpha,p0.alpha*p1.alpha*alpha, startfade,vanish,nil,nil,progress)
+							Draw_line3D2(p2.pos,p1.pos, width, c2,c2, p2.alpha*p1.alpha*alpha,p2.alpha*p1.alpha*alpha, startfade,vanish,nil,nil,progress)
+							Draw_line3D2(p0.pos,p2.pos, width, c0,c0, p0.alpha*p2.alpha*alpha,p0.alpha*p2.alpha*alpha, startfade,vanish,nil,nil,progress)
+						else
+							Draw_line3D2(p0.pos,p1.pos, width, c0,c0, p0.alpha*p1.alpha*alpha,p0.alpha*p1.alpha*alpha, startfade,vanish,nil,nil,progress)
+							Draw_line3D2(p1.pos,p2.pos, width, c1,c1, p1.alpha*p2.alpha*alpha,p1.alpha*p2.alpha*alpha, startfade,vanish,nil,nil,progress)
+							Draw_line3D2(p1.pos,p3.pos, width, c1,c1, p3.alpha*p1.alpha*alpha,p3.alpha*p1.alpha*alpha, startfade,vanish,nil,nil,progress)
+						end
+						if i==1 then
+							Draw_line3D2(p0.pos,p3.pos, width, c0,c0, p0.alpha*p3.alpha*alpha,p0.alpha*p3.alpha*alpha, startfade,vanish,nil,nil,progress)
+						end
+						if j==#POSdraw[i]-1 then
+							Draw_line3D2(p3.pos,p2.pos, width, c3,c3, p3.alpha*p2.alpha*alpha,p3.alpha*p2.alpha*alpha, startfade,vanish,nil,nil,progress)
+						end
+
+					end
+
+				end
+			end
+		end
+	end
+	if shuffle>0 then
+		local s = shuffle>3 and 2 or shuffle
+		POSline 	= Tools.Shuffle(POSline,s,shuffle)
+	end
+	if (mode==1) or (mode==3) then
+		obj.alpha = alpha
+		Tools.Draw_lineCn2(0,POSline,{progress*#POSline,maxnum},width,0xffffff,alpha,startfade,vanish,nil,nil)
+	end
+	if (mode==2) or (mode==4) then
+		obj.alpha = alpha
+		Tools.Draw_lineCn2(1,POSline,{progress*#POSline,maxnum},width,0xffffff,alpha,startfade,vanish,nil,nil)
+	end
+end
+
+-- 点描画
+if (size>0) then
+	if fig=="背景" then fig="四角形" end
+	local Blur = function() return end
+	if (OPT.depth.is_enabled) and (OPT.depth.blur>0) then
+		if (OPT.depth.lens)==1 then
+			Blur = function(blur,depth)
+				obj.effect("レンズブラー","範囲",blur*(1-depth),"サイズ固定",0)
+			end
+		else
+			Blur = function(blur,depth)
+				obj.effect("ぼかし","範囲",blur*(1-depth))
+			end
+		end
+	end
+
+	local al = OPT.depth.alpha
+	obj.setoption("billboard",bil or 3)
+	obj.setoption("blend",blend_dot,blend_dot>0 and "force" or 0)
+	for i=0,#POSdraw-1 do
+		for j=0,#POSdraw[i+1]-1 do
+			obj.alpha = def.alpha
+			for k=0,zn-1 do
+				local p0 = POSdraw[i+1][j+1][k+1]
+				local col,alpha = p0.col, p0.alpha
+				local pos 	= p0.pos
+				local depth = p0.depth
+				local zoom 	= p0.MAP[mapt][mapd] * p0.zoom
+				if (alpha>0) then
+					obj.load("figure",fig,col,size*zoomd,fig_l)
+					obj.cx,obj.cy,obj.cz = 0,0,0
+					obj.rx,obj.ry,obj.rz = 0,0,0
+					Blur(OPT.depth.blur,depth[1])
+					obj.draw(pos[1],pos[2],pos[3],1/zoomd*zoom,alpha)
+				else
+					obj.alpha = 0
+				end
+			end
+		end
+	end
+else
+	obj.alpha=0
+end
+
+-------------------------------------------------------
+@GCv2[Position]
+-------------------------------------------------------
+--track0:PosX,-9000,9000,0
+--track1:PosY,-9000,9000,0
+--track2:PosZ,-9000,9000,0
+--track3:random,-9000,9000,0
+--check0:回転前に実行,0;
+--dialog:HSLAXYZR[0/8],local map=0;map方向,local mapd=0;DirectionType/chk,local bias=0;Pos(add),local pos={0,0,0};random(xyz),local rnd={1,1,1};
+--/////------------------------
+local Tools = getcolortools
+local V = Tools.Vector
+local Tbl = Tools.TBL
+--/////------------------------
+
+if not tostring(pos):find("table:") then
+	pos = {pos,pos,pos}
+end
+local posx = Tbl(pos[1],0)
+local posy = Tbl(pos[2],posx)
+local posz = Tbl(pos[3],posx)
+
+if not tostring(map):find("table:") then
+	map = {map,map,map,map}
+end
+local mapx = Tbl(map[1])
+local mapy = Tbl(map[2],mapx)
+local mapz = Tbl(map[3],mapx)
+local maprnd = Tbl(map[4],0)
+
+if not tostring(mapd):find("table:") then
+	mapd = {mapd,mapd,mapd,mapd}
+end
+local mapdx = Tbl(mapd[1],0)
+local mapdy = Tbl(mapd[2],mapdx)
+local mapdz = Tbl(mapd[3],mapdx)
+local mapdrnd = Tbl(mapd[4],0)
+
+if not tostring(rnd):find("table:") then
+	rnd = {rnd,rnd,rnd}
+end
+local rndx = Tbl(rnd[1])
+local rndy = Tbl(rnd[2],rndx)
+local rndz = Tbl(rnd[3],rndx)
+GetColorOption = GetColorOption or {}
+GetColorOption.pos = {
+	map = {x=mapx,y=mapy,z=mapz,rnd=maprnd},
+	mapd = {x=mapdx,y=mapdy,z=mapdz,rnd=mapdrnd},
+	x = obj.track0+posx,
+	y = obj.track1+posy,
+	z = obj.track2+posz,
+	random = obj.track3,
+	rnd = {rndx,rndy,rndz},
+	bias = bias,
+	is_befor = obj.check0
+}
+
+-------------------------------------------------------
+@GCv2[Scale]
+-------------------------------------------------------
+--track0:ScaleX,-9000,9000,0
+--track1:ScaleY,-9000,9000,0
+--track2:ScaleZ,-9000,9000,0
+--track3:random,-9000,9000,0
+--check0:param,0
+--dialog:HSLA XYZR,local map=0;map方向,local mapd=0;randamdirection/chk,local bias=0;Scale(add),local scl={0,0,0}
+--/////------------------------
+local Tools = getcolortools
+local V = Tools.Vector
+local Tbl = Tools.TBL
+--/////------------------------
+if not tostring(scl):find("table:") then
+	scl = {scl,scl,scl}
+end
+local sclx = Tbl(scl[1],0)
+local scly = Tbl(scl[2],sclx)
+local sclz = Tbl(scl[3],sclx)
+sclx = sclx*.01
+scly = scly*.01
+sclz = sclz*.01
+
+if not tostring(map):find("table:") then
+	map = {map,map,map}
+end
+local mapx = Tbl(map[1])
+local mapy = Tbl(map[2],mapx)
+local mapz = Tbl(map[3],mapx)
+
+if not tostring(mapd):find("table:") then
+	mapd = {mapd,mapd,mapd}
+end
+local mapdx = Tbl(mapd[1],0)
+local mapdy = Tbl(mapd[2],mapdx)
+local mapdz = Tbl(mapd[3],mapdx)
+
+GetColorOption = GetColorOption or {}
+GetColorOption.scale = {
+	map = {x=mapx,y=mapy,z=mapz},
+	mapd = {x=mapdx,y=mapdy,z=mapdz},
+	bias = bias,
+	x = obj.track0*.01+sclx,
+	y = obj.track1*.01+scly,
+	z = obj.track2*.01+sclz,
+	random = obj.track3*.01
+}
+
+-------------------------------------------------------
+@GCv2[Twist]
+-------------------------------------------------------
+--track0:TwistX,-3600,3600,0
+--track1:TwistY,-3600,3600,0
+--track2:TwistZ,-3600,3600,0
+--track3:random,-1000,1000,0
+--check0:param,0
+--dialog:HSLA XYZR,local map=0;map方向,local mapd=0;回転ﾓｰﾄﾞ[0/4],local mode=0;scale,local scale=1;evolution,local time={0,0,0};軸⇔範囲/chk,ancmode=0;範囲,local radius=100;ｱﾝｶｰ(ﾚｲﾔ),t_anc={0,0,0};random[xyx],local rnd={1,1,1};
+--/////------------------------
+if not getcolortools then require("getcolortools") end
+local Tools = getcolortools
+local V = Tools.Vector
+local Tbl = Tools.TBL
+--/////------------------------
+t_anc = t_anc or {0,0,0}
+if not tostring(t_anc):find("table:") then
+	local l="layer"..t_anc
+	if obj.getvalue(l..".x") then
+		t_anc = { obj.getvalue(l..".x"),obj.getvalue(l..".y"),obj.getvalue(l..".z") }
+		t_anc = V.Sub(t_anc,{ obj.x+obj.ox, obj.y + obj.oy, obj.z+obj.oz })
+	else
+		obj.setanchor("t_anc",1,"xyz")
+	end
+else
+	obj.setanchor("t_anc",1,"xyz")
+end
+
+if not tostring(map):find("table:") then
+	map = {map,map,map,map}
+end
+local mapx = Tbl(map[1])
+local mapy = Tbl(map[2],mapx)
+local mapz = Tbl(map[3],mapx)
+local maprnd = Tbl(map[4],0)
+
+if not tostring(mapd):find("table:") then
+	mapd = {mapd,mapd,mapd,mapd}
+end
+local mapdx = Tbl(mapd[1],0)
+local mapdy = Tbl(mapd[2],mapdx)
+local mapdz = Tbl(mapd[3],mapdx)
+local mapdrnd = Tbl(mapd[4],0)
+
+if not tostring(time):find("table:") then
+	time = {time,time,time}
+end
+local timex = Tbl(time[1]) * obj.time
+local timey = Tbl(time[2]) * obj.time
+local timez = Tbl(time[3]) * obj.time
+
+--rnd = Tbl(rnd,{1,1,1})
+if not tostring(rnd):find("table:") then
+	rnd = {rnd,rnd,rnd}
+end
+local rndx = Tbl(rnd[1])
+local rndy = Tbl(rnd[2],rndx)
+local rndz = Tbl(rnd[3],rndx)
+
+mode = Tbl(mode,0)
+--mode = mode%5
+GetColorOption = GetColorOption or {}
+GetColorOption.twist = {
+	map = {x=mapx,y=mapy,z=mapz,rnd=maprnd},
+	mapd = {x=mapdx,y=mapdy,z=mapdz,rnd=mapdrnd},
+	time = {x=timex,y=timey,z=timez},
+	x = obj.track0,
+	y = obj.track1,
+	z = obj.track2,
+	random = obj.track3,
+	rnd = {rndx,rndy,rndz},
+	mode = mode,
+	scale = scale,
+	anc = t_anc,
+	ancmode = ancmode,
+	radius = radius
+}
+
+-------------------------------------------------------
+@GCv2[Delay]
+-------------------------------------------------------
+--track0:time,0,1000,0
+--track1:pattern,0,5,0,1
+--track2:HSLmap,0,4,0,1
+--track3:random,0,200,0
+--check0:invert,0;
+--dialog:HSLA XYZR,local map=0;map方向,local mapd=0;
+--/////------------------------
+local time 		= obj.track0*.01
+local pattern 	= math.floor(obj.track1)
+local map 		= math.floor(obj.track2)
+local random 	= obj.track3*.01
+local Tools = getcolortools
+local V = Tools.Vector
+local Tbl = Tools.TBL
+local gv = obj.getvalue
+--/////------------------------
+local f = getcolortools.Deay_f or function(pos,wn,hn,i,j,count,MAP)
+   local p = MAP[map][1]
+   local x,y,z = pos[1]-obj.x,pos[2]-obj.y,pos[3]-obj.z
+   local is_m = obj.check0
+   local pat = math.abs(pattern)
+   local s = 0
+   local idx = obj.index/obj.num
+   local idx1 = (obj.index+1)/obj.num
+   if pat==0 then
+	   s = (idx+1) * time
+   elseif pat==1 then
+	   s = (i/wn)*time
+	   if is_m then s = math.abs(i-wn/2)*time end
+	   s = s*idx1
+   elseif pat==2 then
+	   s = (j/hn)*time
+	   if is_m then s = math.abs(j-hn/2)*time end
+	   s = s*idx1
+   elseif pat==3 then
+	   s = (i/wn)*time + (j/hn)*time
+   elseif pat==4 then
+	   local I=i-wn/2
+	   local J=j-hn/2
+	   s = math.sqrt(I*I+J*J)/(math.sqrt(wn*wn+hn*hn)*.5)
+	   s = s*time
+	   s = s*idx1
+   elseif pat==5 then
+	   s = obj.rand(0,100,0,count)*.01 * time
+   end
+   local rnd = obj.rand(0,100,0,count)*.01 * random
+   local t = obj.time - s * p - rnd
+   if t<0 then t = 0 end
+   x = x+gv("x",t)
+   y = y+gv("y",t)
+   z = z+gv("z",t)
+   return {x,y,z}
+end
+local fr = getcolortools.Deay_fr or function(rot,wn,hn,i,j,count,MAP)
+   local p = MAP[map][1]
+   local x,y,z = rot[1],rot[2],rot[3]
+   local is_m = obj.check0
+   local pat = math.abs(pattern)
+   local s = 0
+   local idx = obj.index/obj.num
+   local idx1 = (obj.index+1)/obj.num
+   if pat==0 then
+	   s = (idx+1) * time
+   elseif pat==1 then
+	   s = (i/wn)*time
+	   if is_m then s = math.abs(i-wn/2)*time end
+	   s = s*idx1
+   elseif pat==2 then
+	   s = (j/hn)*time
+	   if is_m then s = math.abs(j-hn/2)*time end
+	   s = s*idx1
+   elseif pat==3 then
+	   s = (i/wn)*time + (j/hn)*time
+   elseif pat==4 then
+	   local I=i-wn/2
+	   local J=j-hn/2
+	   s = math.sqrt(I*I+J*J)/(math.sqrt(wn*wn+hn*hn)*.5)
+	   s = s*time
+	   s = s*idx1
+   elseif pat==5 then
+	   s = obj.rand(0,100,0,count)*.01 * time
+   end
+   local rnd = obj.rand(0,100,0,count)*.01 * random
+   local t = obj.time - s * p - rnd
+   if t<0 then t = 0 end
+   obj.rx = gv("rx",t)
+   obj.ry = gv("ry",t)
+   obj.rz = gv("rz",t)
+end
+getcolortools.Deay_f = f
+getcolortools.Deay_fr= fr
+GetColorOption = GetColorOption or {}
+GetColorOption.delay = {
+	 func		= f,
+	 funcr	    = fr
+}
+
+-------------------------------------------------------
+@GCv2[ColorShift]
+-------------------------------------------------------
+--track0:H,-9000,9000,0
+--track1:S,-9000,9000,0
+--track2:L,-9000,9000,0
+--track3:A,-9000,9000,0
+--check0:反転,0
+--dialog:X,local I=0;Y,local J=0;Z,local K=0;sin周期,local frec=1;sin位相,local phase=0;
+--/////------------------------
+local Tools = getcolortools
+GetColorOption = GetColorOption or {}
+--/////------------------------
+GetColorOption.shift = {
+	H = obj.track0*.01,
+	S = obj.track1*.01,
+	L = obj.track2*.01,
+	A = obj.track3*.01,
+	I = I*.01,
+	J = J*.01,
+	K = K*.01,
+	invert = obj.check0,
+	frec = frec,
+	phase = phase
+}
+
+
+-------------------------------------------------------
+@GCv2[Field]
+-------------------------------------------------------
+--track0:Radius,0,5000,200
+--track1:Strength,-100,500,100
+--track2:Mode,0,1,0,1
+--track3:アンカー数,0,8,1,1
+--dialog:FieldLayer,local layer=0;原点基準に固定/chk,local fixanchor=0;Radius(add),local rad_d=0;ｱﾝｶｰ,f_anc={0,0,0};zoom影響度,local fzoom=0;alpha影響度,local alpha=0;色強度,local col_am=0;色/col,local col=0xffffff;random[xyz],local rnd={0,0,0};
+
+local Tools = getcolortools
+local gv = obj.getvalue
+local rot = {gv("rx"),gv("ry"),gv("rz")}
+local zoom = gv("zoom")*.01
+local x,y,z = obj.x+obj.ox*0, obj.y+obj.oy*0, obj.z+obj.oz*0
+
+local layerpos = {}
+if (obj.track3>0) then
+	obj.setanchor("f_anc",obj.track3,"xyz")
+	for i=1,obj.track3 do
+		local pos = {f_anc[i*3-2],f_anc[i*3-1],f_anc[i*3]}
+		if fixanchor==1 then
+			pos = {pos[1]-x,pos[2]-y,pos[3]-z}
+		else
+			pos = {Tools.Rot({pos[1],pos[2],pos[3]},rot)}
+		end
+		layerpos[i] = pos
+	end
+end
+
+if not string.find(tostring(layer),"table:") then
+	layer={layer}
+end
+
+for i=1,#layer do
+	local l="layer"..layer[i].."."
+	if gv(l.."x") then
+	  	table.insert( layerpos,{gv(l.."x")-x,gv(l.."y")-y,gv(l.."z")-z} )
+	end
+end
+local strength = obj.track1
+local mode = obj.track2
+local radius = {}
+local num = #layerpos
+if tostring(rad_d):find("table:") then
+	for i=0,num-1 do
+		radius[i+1] = obj.track0 + rad_d[i%(#rad_d)+1]
+	end
+else
+	for i=1,num do
+		radius[i] = obj.track0 + rad_d
+	end
+end
+local r,g,b = RGB(col)
+if not tostring(rnd):find("table:") then
+	rnd={rnd,rnd,rnd}
+end
+local rndx=rnd[1]
+local rndy=rnd[2] or rndx
+local rndz=rnd[3] or rndx
+
+local Field = function(P,A,radius,strength,mode)
+	-- P:objectpos
+	-- A:fieldpos
+	radius,strength = radius or 100,strength or 100
+	local AP  = {P[1]-A[1],P[2]-A[2],P[3]-A[3]}
+	local len = math.sqrt(AP[1]*AP[1] + AP[2]*AP[2] + AP[3]*AP[3])
+	local state = (mode==1 and len>radius) or (mode~=1  and len<radius) or false
+	if state then
+		local N    = {AP[1]/len, AP[2]/len, AP[3]/len}
+		local push = (radius - len) * strength*.01
+		local PV   = {N[1]*push,N[2]*push,N[3]*push}
+		return {P[1]+PV[1],P[2]+PV[2],P[3]+PV[3]},1-(len/radius)
+	else
+		--範囲外は何もせずPをそのまま返す
+		return {P[1],P[2],P[3]},0
+	end
+end
+
+GetColorOption = GetColorOption or {}
+GetColorOption.field = {
+	is_enabled 	= true,
+	pos			= pos,
+	layer		= layerpos,
+	radius		= radius,
+	strength	= strength,
+	mode		= mode,
+	zoom		= fzoom/100,
+	alpha 		= alpha/100,
+	col			= {r=r/255,g=g/255,b=b/255},
+	col_am		= col_am*.01,
+	rnd 		= {rndx*100,rndy*100,rndz*100},
+	func		= Field
+
+}
+
+-------------------------------------------------------
+@GCv2[CameraDepth]
+-------------------------------------------------------
+--track0:focal,-5000,5000,0
+--track1:Start,0,3600,500
+--track2:Fade,1,3600,1500
+--track3:Blur,0,100,0
+--check0:焦点を目標に固定,0
+--dialog:レンズブラー/chk,lens=0;透明化/chk,local alpha=1;色変化強度,local fog=0;farColor/col,local farcolor=0xffffff;nearColor/col,local nearcolor=0xffffff;平面レイヤ,local layer=0;
+--/////------------------------
+local focalpoint = obj.track0
+local startfade	 = obj.track1
+local vanish	 = obj.track2
+local blur	 = obj.track3
+local Tools = getcolortools
+local V = Tools.Vector
+local Tbl = Tools.TBL
+local gv = obj.getvalue
+--/////------------------------
+
+local cam = Tools.Camparam()
+local l = "layer"..layer.."."
+if layer>0 then
+	local r =  { gv(l.."rx"), gv(l.."ry"), gv(l.."rz") }
+	cam.n = { Tools.Rot({0,0,-1},r) }
+	cam.l = 1
+	cam.x,cam.y,cam.z = gv(l.."x"),gv(l.."y"),gv(l.."z")
+	obj.check0 = true
+end
+-- 点Pと平面上の点AのベクトルPAと平面の法線nを内積すると平面と点の距離が出る
+-- Dot(Sub(P,A),n)
+local param = {
+	focalpoint 		= focalpoint,
+	startfade 		= startfade,
+ 	vanish 			= vanish,
+	near_startfade 	= near_startfade,
+	near_vanish 	= near_vanish,
+	focusmode 		= obj.check0
+}
+
+local Depth = function(pos,param_t)
+	if not param_t then return {1,1,range=1} end
+	local focalpoint 		= param_t.focalpoint or 0
+	local startfade 		= param_t.startfade or 300
+	local vanish 			= param_t.vanish or 100
+	local near_startfade 	= param_t.near_startfade
+	local near_vanish 		= param_t.near_vanish
+	local focusmode 		= param_t.focusmode
+	near_startfade,near_vanish = near_startfade or startfade ,near_vanish or vanish
+	local D,depth,pd,nD=0,0,0,1
+	-- local cam = cam_param
+	local d = cam.l
+	local n = cam.n
+	local pd = (focusmode) and (d+focalpoint) or (1024+focalpoint)
+	local pl  = V.Scale(n,pd)
+	local pv = {pos[1]+obj.x-cam.x, pos[2]+obj.y-cam.y, pos[3]+obj.z-cam.z}
+	local depth  = V.Dot(V.Sub(pv,pl),n)
+	--近距離消去用
+	local nvanish = 100
+    local npl = V.Scale(n,nvanish+200)
+    local ndepth = V.Dot({pv[1]-npl[1],pv[2]-npl[2],pv[3]-npl[3]},n)
+    if ndepth<0 then
+        nD = math.abs(ndepth)-nvanish
+        nD = nD<0 and 0 or nD
+        nD = nD>nvanish and nvanish or nD
+        nD = (1-nD/nvanish)
+    end
+	if depth<0 then
+        startfade,vanish = near_startfade,near_vanish
+    end
+	D = math.abs(depth)-startfade
+	D = D<0 and 0 or D
+	D = D>vanish and vanish or D
+	D = (1-D/vanish)
+	return {D,nD,range=depth}
+end
+
+local fr,fg,fb = RGB(farcolor)
+local nr,ng,nb = RGB(nearcolor)
+GetColorOption = GetColorOption or {}
+GetColorOption.depth = {
+	is_enabled	= true,
+	blur = blur,
+	lens = lens,
+	alpha = alpha,
+	param = param,
+	fog 		= fog*.01,
+	farcolor 	= {r=fr/255,g=fg/255,b=fb/255},
+	nearcolor 	= {r=nr/255,g=ng/255,b=nb/255},
+	func = Depth
+}
+-------------------------------------------------------
+@GCv2[DrawPolygon]
+-------------------------------------------------------
+--track0:opacity,0,100,100
+--track1:diffuse,0,200,70
+--track2:ambient,0,100,20
+--track3:specular,0,200,80
+--check0:反射,0
+--dialog:SpecularShinness,shininess=90;Ambientcolor/col,ambientcol=0xffffff;三角分割/chk,local tri=0;色補(反射無効),local colfade=0;XY/chk,local XY=1;YZ/chk,local YZ=0;ZX/chk,local ZX=0;VanishStart,local vanish=200;Fadedist,local fade=100;Blend,local blend=0;specularBlend,local sp_blend=1
+--/////------------------------
+local opacity 	= obj.track0*.01
+local diffuse 	= obj.track1*.01
+local ambient	= obj.track2*.01
+local specular 	= obj.track3*.01
+local Tools = getcolortools
+local V = Tools.Vector
+local Tbl = Tools.TBL
+local Linear = Tools.Linear
+local r,g,b = RGB(ambientcol)
+local force = "force"
+blend = blend or 0
+if blend<=0 then force=0 end
+local norm_color=0
+if (blend<0) then
+	norm_color=1
+	blend=0
+end
+local ref = {
+	ambient		= ambient,
+	diffuse 	= diffuse,
+	specular 	= specular,
+	shininess 	= shininess*.01,
+	ambientcol 	= {r=r/255,g=g/255,b=b/255}
+}
+local reflect = obj.check0
+
+local cam_param = Tools.Camparam()
+local Clamp=function(v)
+	return math.max(math.min(v,1),0)
+end
+-- 頂点の組み合わせの最大距離 (消滅用)
+local Maxlen = function(a,b,c,d)
+	local v
+	if d then
+		v=math.max(V.Lensq(a,b),V.Lensq(b,c),V.Lensq(c,d),V.Lensq(d,a))
+	else
+		v=math.max(V.Lensq(a,b),V.Lensq(b,c),V.Lensq(c,a))
+	end
+	return math.sqrt(v)
+end
+--法線との反射ベクトルを求める n=法線(正規化),v=入射ベクトル
+local Vec_reflect = function(n,v)
+	local t = -V.Dot(n,v)/V.Dot(n,n)
+	return V.Add(v,V.Scale(n,t*2))
+end
+-- 面重心座標、面法線、面⇒カメラ位置ベクトル
+local Face = function(a,b,c,d,cam_param)
+	d = d or c
+	local a_b = V.Sub(b,a)
+	local b_c = V.Sub(c,b)
+	local c_d = V.Sub(d,c)
+	local d_a = V.Sub(a,d)
+	local face0 = V.Cross(a_b,b_c)
+	local face1 = V.Cross(c_d,d_a)
+	local face = V.Scale( V.Add(face1, face0) ,.5)
+	local normal = V.Normalize(face)
+	local center = {(a[1]+b[1]+c[1]+d[1])/4,(a[2]+b[2]+c[2]+d[2])/4,(a[3]+b[3]+c[3]+d[3])/4}
+	local cam = cam_param
+	local eye = V.Normalize(  V.Sub(center,{cam.x,cam.y,cam.z} ))
+	return {center = center,normal = normal ,eye = eye}
+end
+
+local Clampt=function(v)
+	return {
+		math.min(1,v[1]),
+		math.min(1,v[2]),
+		math.min(1,v[3])
+	}
+end
+-- N = 面法線
+-- L = ライトベクトル
+-- E = 視線ベクトル
+local Lambert = function(N,L,lightcol,matcol,albedo)
+	-- N*L=|N||L|cosθ=cosθ
+	local v = math.max(0,V.Dot(N,L))
+	local rgb = V.Mul(lightcol,matcol)
+	rgb = V.Scale(rgb,v*(albedo or 1))
+	return matcol--rgb
+end
+
+local Phong = function(N,L,E,lightcol,shinnes,albedo)
+	-- R = L * 2 * N * (N ・L)
+	local v = math.max(0,V.Dot(N,L))
+	local R = {-L[1]*2*N[1]*v ,-L[2]*2*N[2]*v ,-L[3]*2*N[3]*v}
+	local S = math.max(0,V.Dot(R,E))
+	local S = math.pow(S,(shinnes or 10))
+	local rgb = V.Scale(lightcol,S*(albedo or 1))
+	return rgb
+end
+
+local R_shader=function(p0,p1,p2,p3,rgb,ref,light_array,cam_param)
+	ref = ref  or {diffuse=.4,specular=.6,ambient=.2,shininess=.6,ambientcol={r=1,g=1,b=1}}
+	local matcol = {rgb.r,rgb.g,rgb.b}
+	local face = Face(p0,p1,p2,p3,cam_param)
+	if norm_color==1 then
+		matcol = {Linear(face.normal[1],-1,1,0,1),Linear(face.normal[2],1,-1,0,1),Linear(face.normal[3],-1,1,0,1)}
+	end
+	local diffuse = {0,0,0}
+	local specular = {0,0,0}
+	local color = {0,0,0}
+	local ambientcol = {ref.ambientcol.r, ref.ambientcol.g, ref.ambientcol.b}
+	obj.pixeloption("type","rgb")
+	face.center = V.Add(face.center,{obj.x,obj.y,obj.z})
+	for k,light in pairs(light_array) do
+		local ray,len 	= V.Normalize(V.Sub(light.pos,face.center))
+		if light.parallel==1 then
+			ray = light.line.vc
+			len = V.Dist_p_line( face.center,light.line.a,light.line.b)
+		end
+		local lightcol = {light.r,light.g,light.b}
+		local falloff = Linear(len,light.radius,light.radius+light.distance*2,1,0)^2
+		local diffusenew = Lambert(face.normal,ray,lightcol,matcol,ref.diffuse*falloff)
+		diffuse = V.Add(diffuse,diffusenew)
+		local specularnew = Phong(face.normal,ray,face.eye,lightcol,ref.shininess,ref.specular)
+		specular = V.Add(specular,specularnew)
+		color = V.Add(color,V.Add(diffuse,specular))
+		if (color[1]+color[2]+color[3])>3 then
+			color = Clampt(V.Add(ambientcol,color))
+			obj.putpixel(0,0,color[1]*255,color[2]*255,color[3]*255,255)
+			return color
+		end
+	end
+	color = Clampt(V.Add(ambientcol,color))
+	obj.putpixel(0,0,color[1]*255,color[2]*255,color[3]*255,255)
+	obj.pixeloption("type","col")
+	return color
+end
+
+-- いいかげんなシェーディング
+-- vertex_a,vertex_b,vertex_c,vertex_d
+-- rgb = {r=0~1,g=0~1,b=0~1}
+-- light_array = LightLayer
+local F_shader = function(p0,p1,p2,p3,rgb,ref,light_array,cam_param)
+-->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+	ref = ref  or {diffuse=.4,specular=.6,ambient=.2,shininess=.6,ambientcol={r=1,g=1,b=1}}
+	local R,G,B = rgb.r,rgb.g,rgb.b
+	local face = Face(p0,p1,p2,p3,cam_param)
+	face.center = V.Add(face.center,{obj.x,obj.y,obj.z})
+	local dR,dG,dB = 0,0,0
+	local rR,rG,rB = 0,0,0
+	local rt = {}
+	--face.normal=V.Scale(face.normal,-1) 法線反転
+	if norm_color==1 then
+		R,G,B = Linear(face.normal[1],-1,1,0,1),Linear(face.normal[2],1,-1,0,1),Linear(face.normal[3],-1,1,0,1)
+	end
+	for k,light in pairs(light_array) do
+		local ray,len 	= V.Normalize(V.Sub(light.pos,face.center))
+		if light.parallel==1 then
+			ray = light.line.vc
+			len = V.Dist_p_line( face.center,light.line.a,light.line.b)
+		end
+		local v_diffuse = V.Dot(face.normal,ray)
+		local inter_eye = (V.Dot(face.eye,face.normal) * v_diffuse)>0 and 0 or 1
+		v_diffuse = math.abs(v_diffuse) * inter_eye
+		local power = Linear(len,light.radius,light.radius+light.distance*2,1,0)^2
+		v_diffuse = v_diffuse * ref.diffuse * power * light.intensity
+		local ray_ref = Vec_reflect(face.normal ,ray)
+		local v_specular = V.Dot(face.eye ,ray_ref)
+		v_specular = math.max(0,v_specular)-- * inter_eye
+		v_specular = (Linear(v_specular,ref.shininess,1,0,1)^1) * ref.specular * power
+		local lR,lG,lB = light.r, light.g, light.b
+		dR = dR+(R*lR)*v_diffuse
+		dG = dG+(G*lG)*v_diffuse
+		dB = dB+(B*lB)*v_diffuse
+		rR = math.min((dR+rR+lR)*v_specular,1)
+		rG = math.min((dG+rG+lG)*v_specular,1)
+		rB = math.min((dB+rB+lB)*v_specular,1)
+		rt[k] = {col = RGB(rR*255,rG*255,rB*255), a=v_specular*light.intensity}
+	end
+	obj.pixeloption("blend",0)
+	local aR,aG,aB = ref.ambientcol.r,ref.ambientcol.g,ref.ambientcol.b
+		  aR,aG,aB = aR*R*ref.ambient, aG*G*ref.ambient, aB*B*ref.ambient
+	obj.putpixel(0,0,RGB(math.min(1,dR+aR)*255,math.min(1,dG+aG)*255,math.min(1,dB+aB)*255),1)
+	for k,v in pairs(rt) do
+		obj.pixeloption("blend",sp_blend or 1)
+		obj.putpixel(0,0,v.col, math.min(1,v.a))
+	end
+	obj.pixeloption("blend")
+-->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+end
+
+local My_drawpoly_ref = function(a,b,c,d,uv,alpha,rgb,ref,light_array,cam_param)
+	if alpha<=0 then return end
+	if #light_array>0 then
+		F_shader(a,b,c,d,rgb,ref,light_array,cam_param)
+	end
+	local x0,y0,z0 = a[1],a[2],a[3] or 0
+	local x1,y1,z1 = b[1],b[2],b[3] or 0
+	local x2,y2,z2 = c[1],c[2],c[3] or 0
+	local x3,y3,z3 = d[1],d[2],d[3] or 0
+	if uv==0 then
+		local al=obj.alpha
+		obj.alpha = alpha
+		obj.drawpoly(x0,y0,z0 ,x1,y1,z1 ,x2,y2,z2 ,x3,y3,z3)
+		obj.alpha=al
+		return
+	end
+	uv = {0,0, 0,0, 0,0, 0,0}
+	u0,v0,u1,v1,u2,v2,u3,v3 = uv[1],uv[2],uv[3],uv[4],uv[5],uv[6],uv[7],uv[8]
+	obj.drawpoly(x0,y0,z0 ,x1,y1,z1 ,x2,y2,z2 ,x3,y3,z3 ,u0,v0,u1,v1,u2,v2,u3,v3 ,alpha or 1)
+end
+
+
+local Facets = function(POSdraw,colfade,light_array,cam_param,vanish,fade,tri,ref,XY,ZX,YZ)
+	local uv0= colfade==1 and {0,0,0,0,2,0,2,2} or {0,0,0,0,0,0,0,0}
+	local uv1= colfade==1 and {0,0,0,0,2,2,0,2} or {0,0,0,0,0,0,0,0}
+	local uv2= colfade==1 and {0,0,0,0,2,0,0,2} or {0,0,0,0,0,0,0,0}
+	local uv3= colfade==1 and {2,0,2,0,2,2,0,2} or {0,0,0,0,0,0,0,0}
+	local uv4= colfade==1 and 0 or {0,0,0,0,0,0,0,0}
+		if (XY==1) then
+
+			for i=1,#POSdraw-1 do
+				for j=1,#POSdraw[i]-1 do
+					for k=1,#POSdraw[i][j] do
+						local p0 = POSdraw[i][j][k]
+						local p1 = POSdraw[i+1][j][k]
+						local p2 = POSdraw[i+1][j+1][k]
+						local p3 = POSdraw[i][j+1][k]
+						local max = Maxlen(p0.pos,p1.pos,p2.pos,p3.pos)
+						local vanish = Linear(max,vanish,fade,1,0)
+						local col0,col1,col2,col3 = p0.col,p1.col,p2.col,p3.col
+						local alp0,alp1,alp2,alp3 = p0.alpha,p1.alpha,p2.alpha,p3.alpha
+						obj.putpixel(0,0,col0,1)
+						obj.putpixel(1,0,col1,1)
+						obj.putpixel(1,1,col2,1)
+						obj.putpixel(0,1,col3,1)
+						if (tri==0) then
+							My_drawpoly_ref(p0.pos,p1.pos,p2.pos,p3.pos,uv0,alp0*alp1*alp2*alp3*vanish,p0.rgb,ref,light_array,cam_param)
+						else
+							if j%2==0 then
+								My_drawpoly_ref(p0.pos,p0.pos,p1.pos,p2.pos,uv0,alp0*alp1*alp2 * vanish,p0.rgb,ref,light_array,cam_param)
+								My_drawpoly_ref(p0.pos,p0.pos,p2.pos,p3.pos,uv1,alp0*alp2*alp3 * vanish,p0.rgb,ref,light_array,cam_param)
+							else
+								My_drawpoly_ref(p0.pos,p0.pos,p1.pos,p3.pos,uv2,alp0*alp1*alp3 * vanish,p0.rgb,ref,light_array,cam_param)
+								My_drawpoly_ref(p1.pos,p1.pos,p2.pos,p3.pos,uv3,alp1*alp2*alp3 * vanish,p0.rgb,ref,light_array,cam_param)
+							end
+						end
+
+					end
+				end
+			end
+
+		end
+
+		if (ZX==1) then
+			for i=1,#POSdraw-1 do
+				for j=1,#POSdraw[i] do
+					for k=#POSdraw[i][j],2,-1 do --z軸は奥から引く
+						local p0,y0,z0 = POSdraw[i  ][j][k  ]
+						local p1,y1,z1 = POSdraw[i+1][j][k  ]
+						local p2,y2,z2 = POSdraw[i+1][j][k-1]
+						local p3,y3,z3 = POSdraw[i  ][j][k-1]
+						local max = Maxlen(p0.pos,p1.pos,p2.pos,p3.pos)
+						local vanish = Linear(max,vanish,fade,1,0)
+						local a0,a1,a2,a3 = p0.alpha,p1.alpha,p2.alpha,p3.alpha
+						obj.putpixel(0,0,p0.col,1)
+						obj.putpixel(1,0,p1.col,1)
+						obj.putpixel(1,1,p2.col,1)
+						obj.putpixel(0,1,p3.col,1)
+						if (tri==0) then
+							My_drawpoly_ref(p0.pos,p1.pos,p2.pos,p3.pos,uv0,a0*a1*a2*a3 * vanish,p0.rgb,ref,light_array,cam_param)
+						else
+							if j%2==0 then
+								My_drawpoly_ref(p0.pos,p0.pos,p1.pos,p2.pos,uv0,a0*a1*a2 * vanish,p1.rgb,ref,light_array,cam_param)
+								My_drawpoly_ref(p0.pos,p0.pos,p2.pos,p3.pos,uv1,a0*a2*a3 * vanish,p3.rgb,ref,light_array,cam_param)
+							else
+								My_drawpoly_ref(p0.pos,p0.pos,p1.pos,p3.pos,uv2,a0*a1*a3 * vanish,p0.rgb,ref,light_array,cam_param)
+								My_drawpoly_ref(p1.pos,p1.pos,p2.pos,p3.pos,uv3,a1*a2*a3 * vanish,p2.rgb,ref,light_array,cam_param)
+							end
+						end
+
+					end
+				end
+			end
+
+		end
+
+		if (YZ==1) then
+			for i=1,#POSdraw do
+				for j=1,#POSdraw[i]-1 do
+					for k=#POSdraw[i][j],2,-1 do --z軸は奥から引く
+						local p0 = POSdraw[i][j  ][k  ]
+						local p1 = POSdraw[i][j  ][k-1]
+						local p2 = POSdraw[i][j+1][k-1]
+						local p3 = POSdraw[i][j+1][k  ]
+						local max = Maxlen(p0.pos,p1.pos,p2.pos,p3.pos)
+						local vanish = Linear(max,vanish,fade,1,0)
+						local a0,a1,a2,a3 = p0.alpha,p1.alpha,p2.alpha,p3.alpha
+						obj.putpixel(0,0,p0.col,1)
+						obj.putpixel(1,0,p1.col,1)
+						obj.putpixel(1,1,p2.col,1)
+						obj.putpixel(0,1,p3.col,1)
+						if (tri==0) then
+							My_drawpoly_ref(p0.pos,p1.pos,p2.pos,p3.pos,uv0,a0*a1*a2*a3 * vanish,p0.rgb,ref,light_array,cam_param)
+						else
+							if j%2==0 then
+								My_drawpoly_ref(p0.pos,p0.pos,p1.pos,p2.pos,uv0,a0*a1*a2 * vanish,p1.rgb,ref,light_array,cam_param)
+								My_drawpoly_ref(p0.pos,p0.pos,p2.pos,p3.pos,uv1,a0*a2*a3 * vanish,p3.rgb,ref,light_array,cam_param)
+							else
+								My_drawpoly_ref(p0.pos,p0.pos,p1.pos,p3.pos,uv2,a0*a1*a3 * vanish,p0.rgb,ref,light_array,cam_param)
+								My_drawpoly_ref(p1.pos,p1.pos,p2.pos,p3.pos,uv3,a1*a2*a3 * vanish,p2.rgb,ref,light_array,cam_param)
+							end
+						end
+
+					end
+				end
+			end
+
+		end
+end
+--/////------------------------
+GetColorOption = GetColorOption or {}
+GetColorOption.poly = {
+	opacity = opacity,
+	ref 	= ref,
+	reflect = obj.check0,
+	tri		= tri,
+	XY 		= XY,
+	YZ 		= YZ,
+	ZX 		= ZX,
+	vanish 	= vanish,
+	fade 	= vanish + math.max(fade,1),
+	colfade = colfade,
+	blend = blend,
+	sp_blend = sp_blend or 1,
+	force = force,
+	func = {Facets=Facets,Maxlen=Maxlen,My_drawpoly_ref=My_drawpoly_ref,Vec_reflect=Vec_reflect,Face=Face,F_shader=F_shader}
+}
+-------------------------------------------------------
+@GCv2[DrawLine]
+-------------------------------------------------------
+--track0:width,0,20,1,0.01
+--track1:maxdist,1,3600,0
+--track2:opacity,0,100,100
+--track3:progress,0,100,100,0.01
+--check0:param,0
+--dialog:mode[0/2],local mode=0;vanishFade,local vanish=200;maxnum(mode2),local maxnum=1;colfade(mode0)/chk,local colorfade=0;shuffle(mode>0),local shuffle=0;
+--/////------------------------
+local width		= obj.track0
+local startfade	= obj.track1
+local alpha		= obj.track2*.01
+local progress	= obj.track3*.01
+local Tools = getcolortools
+local V = Tools.Vector
+local Tbl = Tools.TBL
+--/////------------------------
+GetColorOption = GetColorOption or {}
+GetColorOption.line = {
+	mode		= mode,
+	width 		= width,
+	alpha 		= alpha,
+	starfade	= startfade,
+	vanish 		= startfade+vanish,
+	maxnum 		= maxnum,
+	colorfade 	= colorfade,
+	shuffle 	= shuffle,
+	progress 	= progress
+
+}
+
+-------------------------------------------------------
+@GCv2[Light(別ﾚｲﾔーで使用)]
+-------------------------------------------------------
+--/////------------------------
+--track0:Intensity,0,300,100
+--track1:Radius,0,2000,100
+--track2:Falloff,0,9000,1000
+--track3:density,0,100,20,1
+--check0:有効,1
+--dialog:color/col,local col=0xffffff;Parallelmodel/chk,local parallel=0:
+--/////------------------------
+if not getcolortools then require("getcolortools") end
+local Rot_rpy = getcolortools.Rot_rpy
+local Tools = getcolortools
+local V = Tools.Vector
+local intensity = obj.track0*.01
+local radius = obj.track1
+local distance 	= obj.track2
+local lightsize = obj.track1*.01
+local density = obj.track3
+--/////------------------------
+local Makelightv2 = function(intensity,color,radius,distance,parallel)
+	if not LightLayer then LightLayer={} end
+	intensity	= intensity or 1
+	color		= color or obj.getpixel(0,0)
+	distance 	= distance or 1200
+	distance	= math.max(1,distance)
+	local r,g,b 	= RGB(color)
+	local pos = {obj.x+obj.ox, obj.y+obj.oy, obj.z+obj.oz}
+	local rot = {obj.rx,obj.ry,0}
+	local vc = {Tools.Rot({0,0,-1},rot)}
+	local a = V.Add(pos,vc)
+	local line = {
+			vc = vc,
+			a = a,
+			b = pos
+		}
+	LightLayer[obj.layer] = {
+		parallel 	= parallel,
+		line 		= line,
+		intensity 	= intensity,
+		pos 		= pos,
+		rot 		= rot,
+		radius 		= (radius or 0),
+		distance 	= distance,
+		col			= color,
+		r = r/255,
+		g = g/255,
+		b = b/255
+		}
+	--アクティブでないライトが他にあったら消しておく(あまり役には立たない)
+	local temp = LightLayer
+	for k,v in pairs(LightLayer) do
+		if k>0 then
+			if not obj.getvalue("layer"..k..".x") then
+				temp[k]=nil
+			end
+		end
+	end
+	LightLayer = temp
+end
+
+if (obj.check0) then
+	Makelightv2(intensity,col,radius,distance,parallel)
+	--
+	-- if not 1 then
+	-- 	local v = {Tools.Rot()}
+	-- 	local w,h = obj.getpixel()
+	-- 	local s = math.sqrt(w*w+h*h)
+	-- 	local col=col or obj.getpixel(0,0)
+	-- 	local rx,ry,rz=obj.rx,obj.ry,obj.rz
+	-- 	obj.load("figure","円",col,s)
+	-- 	obj.rx,obj.ry,obj.rz = rx,ry,rz
+	-- 	if (parallel==1) then
+	-- 		for i=0,9 do
+	-- 		 local  vn = V.Scale(v, i*30)
+	-- 		 obj.draw(vn[1],vn[2],vn[3],1,.4 )
+	-- 		end
+	-- 	else
+	-- 		obj.setoption("billboard",3)
+	-- 		obj.effect("ぼかし","範囲",5)
+	-- 		obj.effect("グロー","しきい値",0,"拡散",10,"強さ",intensity*10+40+20)
+	-- 		for i=1,9 do
+	-- 		 local a = (math.cos(i*math.pi/10)+1)/2
+	-- 		 obj.draw(0,0,0,i/9,a*.5)
+	-- 		end
+	-- 	end
+	-- end
+
+else
+	LightLayer[obj.layer]=nil
+end
+--obj.effect()
+
+-- Tools.Draw_line3D2({0,0,0},{100,100,0},10,col,col,1,1)
+
+-- -- ライトっぽいものを表示
+-- if (lightsize>0) and (density>0) then
+-- 	local w,h = obj.getpixel()
+-- 	local falloff = distance*.005
+-- 	local size = 4
+-- 	if falloff<2 then size = size * falloff/2 end
+-- 	--obj.load("figure","円",col,w/2)
+-- 	obj.effect("単色化","color",col,"輝度を保持する",0)
+-- 	obj.effect()
+-- 	obj.effect("ぼかし","範囲",5)
+-- 	obj.setoption("blend",1)
+-- 	obj.setoption("billboard",3)
+-- 	local vc,vl = Vector.Normalize({-obj.x,-obj.y,-obj.z})
+-- 	local R = {r = 0, p = math.pi/180*obj.ry,y = math.pi/180*obj.rx}
+-- 	--local vc = {0,0,1}
+-- 	for i=0,density-1 do
+-- 		local d = 1/density * i
+-- 		local scl = distance * d
+-- 		local P = vc --{getcolortools.Rot_v(vc)}
+-- 		if i<10 then
+-- 			obj.draw(
+-- 			P[1]*scl*1.1,P[2]*scl*1.1,P[3]*scl*1.1,
+-- 			0.2+(falloff+size)*d * lightsize,1/math.exp(i/density*5)*intensity/10,
+-- 			-obj.rx,-obj.ry,-obj.rz
+-- 			)
+-- 		end
+-- 		obj.draw(P[1]*scl,P[2]*scl,P[3]*scl,
+-- 		0.5+(falloff+size)*d * lightsize,1/math.exp(i/density*3.5)*intensity/10,
+-- 		-obj.rx,-obj.ry,-obj.rz
+-- 		)
+-- 	end
+-- end
