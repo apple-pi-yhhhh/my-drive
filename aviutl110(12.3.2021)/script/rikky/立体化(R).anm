@@ -1,0 +1,10 @@
+--track0:Œú‚İ,0,2000,150,1
+--track1:±ÙÌ§è‡’l,0,255,128,1
+--track2:012,0,2,0,0.01
+--track3:Šg‘å—¦,0,1000,100
+--dialog:’†S,cen={0,0,0};‰F/col,col=nil;
+--check0:ŒX‚«ŒvZ,1
+require("dimensionize")
+obj.effect()
+obj.setoption("antialias",1)
+dimensionize.func()
