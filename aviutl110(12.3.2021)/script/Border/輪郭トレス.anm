@@ -1,0 +1,48 @@
+--[[
+
+	CHAP_93.luaを exedit.aufと同じ場所かscriptフォルダに入れてください。
+	
+	rikky_module.dllを使用しているのでお持ちでない方は rikkyさんのとっても便利なDLLパック(rikky_module)ver1.0 を導入して下さい。
+	http://hazumurhythm.com/wev/downloads/
+	導入についてはzipの中身「rikky_moduleの使い方.txt」の30行目まで要熟読。
+
+	
+
+]]
+
+--track0:進捗,0,100,100
+--track1:開始ｽﾞﾚ,-1000,1000,0
+--track2:サイズ,0,100,10
+--track3:奥行,-1000,1000,100
+--check0:奥行双方向,0
+--dialog:間引き,local sk=10;スケール,local scale=1; Z軸描画,local z_num=1;図形/fig,local fig="円";色/col,local d_col=0xffffff;面不透明度,local f_alp=0.5;面色/col,local f_col=0xffffff;loop/chk,local loop=1;
+-------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
+
+require("CHAP_93")
+
+local progress	= obj.track0*.01
+local offset	= obj.track1
+local size	= obj.track2
+local z_depth	= obj.track3
+local both	= obj.check0 and 1 or 0
+	scale	= scale or 1
+	spfield = nil
+local t = Border(
+		progress,		-- 進行度(0～1)
+		{sk,offset,0,loop},	-- {輪郭の間引き,輪郭オフセット,z回転ｽﾞﾚ,loop}
+		z_num,			-- Z方向の数
+		z_depth,		-- Z方向の間隔
+		both,			-- 1ならZ方向を前後に
+		scale,			-- 全体のスケール (1で等倍)
+		{size,d_col,1,fig},	-- {1以上で図形を描画, 図形色, 図形透明度, 図形形状(文字列で指定)}
+		spfield,		-- SphericalFieldOption = {layer,radius ,strength, container}
+		randfx			-- RandomEffector = {layer, radius, strength,smooth}
+	)
+
+
+if f_alp>0 then
+	f_alp = math.min(2,f_alp)
+	-- reflectionparam = {intensity, material_col, light_col, blend_mode, limit_angle , lightlayer}
+	Facets.YZ(t.v, f_col,  f_alp, 0,reflectionparam)
+end
