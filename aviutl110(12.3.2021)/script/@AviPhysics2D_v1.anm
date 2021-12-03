@@ -1,0 +1,1082 @@
+@AP21_物理ワールド_詳細設定
+--track2:一括ｶｿｸX,-1000,1000,0,0.1
+--track3:一括ｶｿｸY,-1000,1000,9.8,0.1
+
+--dialog:※「一括」設定に,a="壁は含まれません";一括加速度指定/chk,flagUseCommonAcceleration=0;一括密度指定/chk,flagUseCommonDensity=0;一括密度,commonDensity=1;一括摩擦係数指定/chk,flagUseCommonFriction=0;一括摩擦係数,commonFriction=0.5;一括反発係数指定/chk,flagUseCommonRestitution=0;一括反発係数,commonRestitution=0.8;
+
+local commonAccelerationX = obj.track2
+local commonAccelerationY = obj.track3
+
+-----functions
+function drawMessage( str )
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	local width = obj.w / 2
+	local height = obj.h / 2
+	obj.load( "figure", "四角形",0xff00ff, 1 )
+	obj.drawpoly(
+		-width, -height, 0,
+		width, -height, 0,
+		width, height, 0,
+		-width, height, 0
+	)
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	obj.draw()
+end
+----------
+
+ap21FlagUseCommonAcceleration = flagUseCommonAcceleration == 1
+ap21CommonAcceleration = {}
+if( ap21FlagUseCommonAcceleration and type( commonAccelerationX ) ~= "number" ) then
+	drawMessage( "「一括加速度X」の値が文字になってるよ！" )
+	ap21CommonAcceleration[1] = 0
+end
+ap21CommonAcceleration[1] = commonAccelerationX
+if( ap21FlagUseCommonAcceleration and type( commonAccelerationY ) ~= "number" ) then
+	drawMessage( "「一括加速度Y」の値が文字になってるよ！" )
+	ap21CommonAcceleration[2] = 0
+end
+ap21CommonAcceleration[2] = commonAccelerationY
+
+ap21FlagUseCommonDensity = flagUseCommonDensity == 1
+if( ap21FlagUseCommonDensity and type( commonDensity ) ~= "number" ) then
+	drawMessage( "「一括密度」の値が文字になってるよ！" )
+	ap21CommonDensity = 1
+end
+if( commonDensity <= 0 ) then
+	drawMessage( "「一括密度」は0より大きい値で指定してください" )
+	ap21CommonDensity = 1
+else	
+	ap21CommonDensity = commonDensity
+end
+
+ap21FlagUseCommonFriction = flagUseCommonFriction == 1
+if( ap21FlagUseCommonFriction and type( commonFriction ) ~= "number" ) then
+	drawMessage( "「一括摩擦係数」の値が文字になってるよ！" )
+	ap21CommonFriction = 0.5
+end
+if( commonFriction < 0 or commonFriction > 1 ) then
+	drawMessage( "「一括摩擦係数」は0から1の範囲で指定してください" )
+	ap21CommonFriction = 0.5
+else	
+	ap21CommonFriction = commonFriction
+end
+
+ap21FlagUseCommonRestitution = flagUseCommonFriction == 1
+if( ap21FlagUseCommonRestitution and type( commonRestitution ) ~= "number" ) then
+	drawMessage( "「一括反発係数」の値が文字になってるよ！" )
+	ap21CommonRestitution = 0.8
+end
+if( commonRestitution < 0 or commonRestitution > 1 ) then
+	drawMessage( "「一括反発係数」は0から1の範囲で指定してください" )
+	ap21CommonRestitution = 0.8
+else	
+	ap21CommonRestitution = commonRestitution
+end
+
+
+
+@AP21_自然オブジェクト_生成
+--track0:サイズX,1,500,50,1
+--track1:サイズY,1,500,50,1
+--track2:加速度X,-1000,1000,0,0.1
+--track3:加速度Y,-1000,1000,9.8,0.1
+
+--dialog:図形/fig,shape="AviPhysics2D_四角形";初期位置{X、Y},initPos={0,0};初期速度{X、Y},initVelocity={0,-40};初期角度,initAngle=0;初期回転速度,initAngularVelocity=3;密度,density=1;摩擦係数(0～1),friction=0.5;反発係数(0～1),restitution=0.8;
+
+obj.setanchor( "initPos", 1 )
+obj.setanchor( "initVelocity", 1 )
+
+----------local variables
+local i = tostring(obj.layer)
+local sizeX = obj.track0
+local sizeY = obj.track1
+local gravityX = obj.track2
+local gravityY = obj.track3
+local scale = 100
+
+----------global variables ( for debug )
+--ap21Objects = {}
+--ap21Objects[i] = {}
+
+----------functions
+function drawMessage( str )
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	local width = obj.w / 2
+	local height = obj.h / 2
+	obj.load( "figure", "四角形",0xff00ff, 1 )
+	obj.drawpoly(
+		-width, -height, 0,
+		width, -height, 0,
+		width, height, 0,
+		-width, height, 0
+	)
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	obj.draw()
+end
+
+function calculateMass()
+	if( shape == "AviPhysics2D_四角形" ) then
+		return sizeX * sizeY * 100 * density
+	elseif( shape == "AviPhysics2D_円" ) then
+		return 4 * math.pi * sizeX^2 * 100 * density
+	elseif( shape == "AviPhysics2D_カプセル" ) then
+		return (4 * math.pi * sizeX^2 * 100 + sizeX * sizeY * 100) * density
+	elseif( shape == "AviPhysics2D_三角形" ) then
+		return sizeX * sizeY / 2 * 100 * density
+	else
+		return mass
+	end
+end
+
+----------set parameters
+ap21Objects[ i ].existSwitch = not ap21Objects[ i ].existSwitch
+ap21Objects[ i ].type = ap21_OBJECT_DYNAMIC
+if( shape == "AviPhysics2D_四角形" ) then
+	ap21Objects[ i ].shape = ap21_SHAPE_BOX
+elseif( shape == "AviPhysics2D_円" ) then
+	ap21Objects[ i ].shape = ap21_SHAPE_SPHERE
+elseif( shape == "AviPhysics2D_カプセル" ) then
+	ap21Objects[ i ].shape = ap21_SHAPE_CAPSULE
+elseif( shape == "AviPhysics2D_三角形" ) then
+	ap21Objects[ i ].shape = ap21_SHAPE_CONE
+else
+	drawMessage( "「図形」の値がおかしいよ！" )
+end
+ap21Objects[ i ].sizeX = sizeX / scale
+ap21Objects[ i ].sizeY = sizeY / scale
+if( ap21FlagUseCommonAcceleration ) then
+	ap21Objects[ i ].gravityX = ap21CommonAcceleration[1]
+	ap21Objects[ i ].gravityY = ap21CommonAcceleration[2]
+else
+	ap21Objects[ i ].gravityX = gravityX
+	ap21Objects[ i ].gravityY = gravityY
+end
+if( type( initPos[1] ) ~= "number" ) then
+	drawMessage( "「初期位置X」の値が文字になってるよ！" )
+	ap21Objects[ i ].initPosX = 0
+else
+	ap21Objects[ i ].initPosX = initPos[1] / scale
+end
+if( type( initPos[2] ) ~= "number" ) then
+	drawMessage( "「初期位置Y」の値が文字になってるよ！" )
+	ap21Objects[ i ].initPosY = 0
+else
+	ap21Objects[ i ].initPosY = initPos[2] / scale
+end
+if( type( initVelocity[1] ) ~= "number" ) then
+	drawMessage( "「初期速度X」の値が文字になってるよ！" )
+	ap21Objects[ i ].initVelocityX = 0
+else
+	ap21Objects[ i ].initVelocityX = initVelocity[1] / 10
+end
+if( type( initVelocity[2] ) ~= "number" ) then
+	drawMessage( "「初期速度Y」の値が文字になってるよ！" )
+	ap21Objects[ i ].initVelocityY = 0
+else
+	ap21Objects[ i ].initVelocityY = initVelocity[2] / 10
+end
+if( type( initAngle ) ~= "number" ) then
+	drawMessage( "「初期角度」の値が文字になってるよ！" )
+	ap21Objects[ i ].initAngle = 0
+else
+	ap21Objects[ i ].initAngle = math.rad( initAngle )
+end
+if( type( initAngularVelocity ) ~= "number" ) then
+	drawMessage( "「初期回転速度」の値が文字になってるよ！" )
+	ap21Objects[ i ].initAngularVelocity = 0
+else
+	ap21Objects[ i ].initAngularVelocity = initAngularVelocity
+end
+if( ap21FlagUseCommonFriction ) then
+	ap21Objects[ i ].friction = ap21CommonFriction
+else
+	if( type( friction ) ~= "number" ) then
+		drawMessage( "「摩擦係数」の値が文字になってるよ！" )
+		ap21Objects[ i ].friction = 0.5
+	else
+		if( friction < 0 or friction > 1 ) then
+			drawMessage( "「摩擦係数」は0から1の範囲で指定してください" )
+			ap21Objects[ i ].friction = 0.5
+		else	
+			ap21Objects[ i ].friction = friction
+		end
+	end
+end
+if( ap21FlagUseCommonRestitution ) then
+	ap21Objects[ i ].restitution = ap21CommonRestitution
+else
+	if( type( restitution ) ~= "number" ) then
+		drawMessage( "「反発係数」の値が文字になってるよ！" )
+		ap21Objects[ i ].restitution = 0.8
+	else
+		if( friction < 0 or friction > 1 ) then
+			drawMessage( "「反発係数」は0から1の範囲で指定してください" )
+			ap21Objects[ i ].restitution = 0.8
+		else	
+			ap21Objects[ i ].restitution = restitution
+		end
+	end
+end
+if( ap21FlagUseCommonDensity ) then
+	density = ap21CommonDensity
+else
+	if( density <= 0 ) then
+		drawMessage( "「密度」は0より大きい値で指定してください" )
+		density = 1
+	end
+end
+ap21Objects[ i ].mass = calculateMass()
+
+if( obj.frame == 0 ) then
+	--最初のフレームのみ初期値を代入しておく（描画に必要）
+	ap21Objects[ i ].ox = initPos[1] / scale
+	ap21Objects[ i ].oy = initPos[2] / scale
+	local angle = (initAngle + 360) % 360
+	if( angle > 180 ) then
+		ap21Objects[ i ].rz = math.rad( angle - 360 )
+	else
+		ap21Objects[ i ].rz = math.rad( angle )
+	end
+	ap21Objects[ i ].initSizeX = sizeX / scale
+	ap21Objects[ i ].initSizeY = sizeY / scale
+end
+if(
+	obj.getoption( "track_mode", 0 ) ~= 0 or
+	obj.getoption( "track_mode", 1 ) ~= 0
+) then
+	drawMessage( "「サイズX,Y」の時間変化はできません" )
+end
+
+----------get parameters
+--debug_print( "ox:" .. tostring( ap21Objects[ i ].ox ) )
+--debug_print( "oy:" .. tostring( ap21Objects[ i ].oy ) )
+--debug_print( "rz:" .. tostring( ap21Objects[ i ].rz ) )
+
+
+
+
+
+
+
+
+
+
+
+@AP21_自然オブジェクト_描画
+--track0:X,-2000,2000,0,0.1
+--track1:Y,-2000,2000,0,0.1
+--track2:拡大率,0,800,100,0.01
+--track3:回転,-360,360,0,0.01
+
+--check0:衝突図形でクリッピング,1
+
+--dialog:下地を描画する/chk,flagDrawBase=1;下地の色/col,color=0xff00ff;下地の透明度,baseAlpha=0;▲の角を丸くする/chk,flagRoundCone=0;
+
+----------functions
+function drawMessage( str )
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	local width = obj.w / 2
+	local height = obj.h / 2
+	obj.load( "figure", "四角形",0xff00ff, 1 )
+	obj.drawpoly(
+		-width, -height, 0,
+		width, -height, 0,
+		width, height, 0,
+		-width, height, 0
+	)
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	obj.draw()
+end
+
+----------local variables
+local i = tostring(obj.layer)
+local scale = 100
+local sizeX = scale * ap21Objects[ i ].sizeX
+local sizeY = scale * ap21Objects[ i ].sizeY
+local shape = ap21Objects[ i ].shape
+
+local imagePosX = obj.track0
+local imagePosY = obj.track1
+local imageZoom = obj.track2
+local imageAngle = obj.track3
+local flagClipping = obj.check0
+local thisFrame = obj.frame
+local isSaving = obj.getinfo( "saving" )
+
+local roundSizeOffset = 1
+
+--debug_print( "自然オブジェクト_描画" )
+
+if( type( baseAlpha ) ~= "number" ) then
+	drawMessage( "「下地の透明度」の値が文字になってるよ！" )
+	baseAlpha = 0
+end
+
+if( flagClipping ) then
+	--最大ｻｲｽﾞの図形を収められる大きさ
+	--このサイズが重さに一番影響してるようだ。ので、動的に計算することにする
+	local w = 800
+	local h = 800
+
+	if( shape == ap21_SHAPE_BOX ) then
+		w = sizeX
+		h = sizeY
+	elseif( shape == ap21_SHAPE_SPHERE ) then
+		w = sizeX + roundSizeOffset
+		h = sizeX + roundSizeOffset
+	elseif( shape == ap21_SHAPE_CAPSULE ) then
+		w = sizeX
+		h = sizeX + sizeY
+	elseif( shape == ap21_SHAPE_CONE ) then
+		local theta = math.atan2( 2 * sizeY, sizeX )
+		local a = 4 / math.sin( theta ) + 2 * sizeX / sizeY
+		local b = 4 / math.cos( theta )
+		w = sizeX + 2*a
+		h = sizeY + b + 0.8*sizeY
+	else
+
+	end
+
+
+	--①ハンバーグを下処理してキャッシュaaaに退避
+	obj.setoption( "drawtarget", "tempbuffer", w, h )
+
+	obj.draw( imagePosX, imagePosY, 0, imageZoom/100, 1.0, 0, 0, imageAngle )
+
+	obj.copybuffer( "cache:aaa", "tmp" )
+
+	--②好きな形のバンズを作ってキャッシュbbbに退避
+	obj.setoption( "drawtarget", "tempbuffer", w, h )
+	
+----------draw figures here
+if( shape == ap21_SHAPE_BOX ) then
+	obj.load( "figure", "四角形", color, 1 )
+	local x = sizeX / 2
+	local y = sizeY / 2
+	
+	obj.drawpoly(
+		-x,	y,	0,
+		x,	y,	0,
+		x,	-y,	0,
+		-x,	-y,	0
+	)
+elseif( shape == ap21_SHAPE_SPHERE ) then
+	obj.load( "figure", "円", color, math.ceil(sizeX + roundSizeOffset) )
+	--local size = sizeX
+	obj.draw()
+	--obj.setfont( "MS UI Gothic", size*0.8, 3, 0xffffff, 0x000000 )
+	--obj.load("text","あ")
+	--obj.draw()
+elseif( shape == ap21_SHAPE_CAPSULE ) then
+	sizeX = sizeX + roundSizeOffset
+
+	obj.load( "figure", "円", color, sizeX )
+	--obj.setoption( "antialias", 0 )
+
+	local x = math.ceil( sizeX / 2 )
+	local y = math.ceil( sizeY / 2 )
+	local offset = 0
+	if( (sizeX+sizeY) % 2 == 0 ) then
+		offset = -0.5
+	end
+
+	--四角形
+	obj.drawpoly(
+		-x,	y,	0,
+		x,	y,	0,
+		x,	-y,	0,
+		-x,	-y,	0,
+		0,x,	sizeX,x,	sizeX,x,	0,x
+	)
+	--上の円
+	obj.drawpoly(
+		-x,	y+x+offset,	0,
+		x,	y+x+offset,	0,
+		x,	y+offset,	0,
+		-x,	y+offset,	0,
+		0,0,	sizeX,0,	sizeX,x,	0,x
+	)
+	--下の円
+	obj.drawpoly(
+		-x,	-(y+offset),	0,
+		x,	-(y+offset),	0,
+		x,	-(y+x+offset),	0,
+		-x,	-(y+x+offset),	0,
+		0,x,	sizeX,x,	sizeX,sizeX,	0,sizeX
+	)
+elseif( shape == ap21_SHAPE_CONE ) then
+	if( flagRoundCone == 1 ) then
+	-----画度が丸い三角形を作る
+		local theta = math.atan2( 2 * sizeY, sizeX )
+
+		--土台の三角形を描画
+		obj.load( "figure", "四角形", color, 1 )
+		obj.drawpoly(
+			0,	0.75*sizeY,	0,
+			0,	0.75*sizeY,	0,
+			0.5*sizeX,	-0.25*sizeY,	0,
+			-0.5*sizeX,	-0.25*sizeY,	0
+		)
+
+		local m = 8
+		local h = m / 2
+
+		--頂点の丸を描画
+		obj.load( "figure", "8dotCircle", color, m )
+		obj.setoption( "antialias", 1 )
+		obj.drawpoly(
+				0 - h,	0.75*sizeY + h,	0,
+				0 + h,	0.75*sizeY + h,	0,
+				0 + h,	0.75*sizeY - h,	0,
+				0 - h,	0.75*sizeY - h,	0,
+			0,0,	m,0,	m,m,	0,m
+		)
+		obj.drawpoly(
+				0.5*sizeX - h,	-0.25*sizeY + h,	0,
+				0.5*sizeX + h,	-0.25*sizeY + h,	0,
+				0.5*sizeX + h,	-0.25*sizeY - h,	0,
+				0.5*sizeX - h,	-0.25*sizeY - h,	0,
+			0,0,	m,0,	m,m,	0,m
+		)
+		obj.drawpoly(
+				-0.5*sizeX - h,	-0.25*sizeY + h,	0,
+				-0.5*sizeX + h,	-0.25*sizeY + h,	0,
+				-0.5*sizeX + h,	-0.25*sizeY - h,	0,
+				-0.5*sizeX - h,	-0.25*sizeY - h,	0,
+			0,0,	m,0,	m,m,	0,m
+		)
+
+		--埋める棒を三つ描画
+		local theta = math.atan2( 2*sizeY, sizeX )
+
+		obj.load( "figure", "四角形", color, m )
+		--下の棒は簡単
+		obj.drawpoly(
+				-0.5*sizeX,	-0.25*sizeY + h,	0,
+				0.5*sizeX,	-0.25*sizeY + h,	0,
+				0.5*sizeX,	-0.25*sizeY - h,	0,
+				-0.5*sizeX,	-0.25*sizeY - h,	0,
+			h,0,	h,0,	h,m,	h,m
+		)
+
+		--斜めの棒は厄介。回転行列とシフト行列で位置を割り出す
+		local sin = math.sin( theta )
+		local cos = math.cos( theta )
+		--棒の大きさの半分（幾何計算より）
+		local x0 = sizeY / (2 * sin)
+		local y0 = h
+		--棒の中心位置（幾何計算より）
+		local Tx = - sizeX / 4
+		local Ty =   sizeY / 4
+
+		obj.setoption( "antialias", 1 )
+		--回転＋シフト。数学の大勝利である。
+		obj.drawpoly(
+				cos*(-x0) -sin*(y0) + Tx,	sin*(-x0) +cos*(y0) + Ty,	0,
+				cos*(x0) -sin*(y0) + Tx,	sin*(x0) +cos*(y0) + Ty,	0,
+				cos*(x0) -sin*(-y0) + Tx,	sin*(x0) +cos*(-y0) + Ty,	0,
+				cos*(-x0) -sin*(-y0) + Tx,	sin*(-x0) +cos*(-y0) + Ty,	0,
+			h,0,	h,0,	h,m,	h,m
+		)
+		sin = math.sin( - theta )
+		cos = math.cos( - theta )
+		Tx = sizeX / 4
+		obj.drawpoly(
+				cos*(-x0) -sin*(y0) + Tx,	sin*(-x0) +cos*(y0) + Ty,	0,
+				cos*(x0) -sin*(y0) + Tx,	sin*(x0) +cos*(y0) + Ty,	0,
+				cos*(x0) -sin*(-y0) + Tx,	sin*(x0) +cos*(-y0) + Ty,	0,
+				cos*(-x0) -sin*(-y0) + Tx,	sin*(-x0) +cos*(-y0) + Ty,	0,
+			h,0,	h,0,	h,m,	h,m
+		)
+	else
+	----標準三角形
+		obj.load( "figure", "四角形", color, 1 )
+
+		local theta = math.atan2( 2 * sizeY, sizeX )
+		local a = 4 / math.sin( theta ) + 2 * sizeX / sizeY
+		local b = 4 / math.cos( theta )
+	
+		obj.drawpoly(
+			0,	0.75*sizeY + b,	0,
+			0,	0.75*sizeY + b,	0,
+			0.5*sizeX + a,	-0.25*sizeY - 4,	0,
+			-0.5*sizeX - a,	-0.25*sizeY - 4,	0
+		)
+	end
+else
+	--図形の指定がおかしいよ！
+end
+----------end draw figures
+
+	obj.copybuffer( "cache:bbb", "tmp" )
+
+	--③ハンバーガー作成
+	obj.setoption( "drawtarget", "tempbuffer", w, h )
+	--バンズ（下）
+	if( flagDrawBase == 1 ) then
+		baseAlpha = math.min( 100, baseAlpha )
+		baseAlpha = math.max( 0,   baseAlpha )
+		obj.copybuffer( "obj", "cache:bbb" )
+		obj.draw( 0, 0, 0, 1.0, 1 - baseAlpha/100 )
+	end
+
+	--ハンバーグ
+	obj.copybuffer( "obj", "cache:aaa" )
+	obj.draw()
+
+	--マスク処理したバンズ（上）をのせる
+	obj.copybuffer( "obj", "cache:bbb" )
+	obj.effect( "反転", "透明度反転", 1 )
+	obj.setoption( "blend", "alpha_sub" )
+	obj.draw()
+
+	--obj.copybuffer( "cache:ccc", "tmp" )
+
+	--④できあがり
+	obj.load( "tempbuffer" )
+
+	--get parameters
+	obj.ox = scale * ap21Objects[ i ].ox
+	obj.oy = scale * ap21Objects[ i ].oy
+	obj.rz = math.deg( ap21Objects[ i ].rz + math.pi ) - 180
+	if( shape == ap21_SHAPE_CONE ) then
+		--解説：円錐の重心は下から1/4だからそれに合わせて描画したのに、Bullet内部ではどうも重心は下から1/2っぽい。ふざけんな！
+		obj.cy = sizeY / 4
+	end
+
+	if( ap21FlagShowGuide and thisFrame == 0 and (not isSaving) ) then
+		--これをすると以降のエフェクトがかけられなくなる
+		obj.setoption( "drawtarget", "framebuffer" )
+	end
+
+	--draw!
+	obj.draw()
+else
+	-----just draw the image
+	obj.ox = scale * ap21Objects[ i ].ox
+	obj.oy = scale * ap21Objects[ i ].oy
+	obj.rz = math.deg( ap21Objects[ i ].rz + math.pi ) - 180
+
+	obj.draw( imagePosX, imagePosY, 0, imageZoom/100, 1.0, 0, 0, imageAngle )
+end
+
+
+----------draw guides
+
+if( ap21FlagShowGuide and thisFrame == 0 and (not isSaving) ) then
+	local ox = ap21Objects[ i ].initPosX * ap21Scale
+	local oy = ap21Objects[ i ].initPosY * ap21Scale
+	local vx = ap21Objects[ i ].initVelocityX * 10
+	local vy = ap21Objects[ i ].initVelocityY * 10
+	local theta = math.atan2( vy, vx ) - math.pi/2
+	local sin = math.sin( theta )
+	local cos = math.cos( theta )
+	local length = math.sqrt( vx^2 + vy^2 )
+	local w = 5
+	local colorA = 0x80ff80
+	local colorB = 0xff8080
+
+	--1.矢印の軸
+	obj.load( "figure", "四角形", colorA, 1 )
+	obj.drawpoly(
+		(-w)*cos+(length)*(-sin) + ox,	(-w)*sin+(length)*cos + oy,	0,
+		(w)*cos+(length)*(-sin) + ox,	(w)*sin+(length)*cos + oy,	0,
+		(2)*cos+(0)*(-sin) + ox,	(2)*sin+(0)*cos + oy,	0,
+		(-2)*cos+(0)*(-sin) + ox,	(-2)*sin+(0)*cos + oy,	0,
+		0,0,	0,1,	1,1,	0,1
+	)
+
+	--2.矢印の先っちょ
+	obj.load( "figure", "三角形", colorA, 20 )
+	obj.effect( "縁取り", "サイズ", 1, "ぼかし", 0 )
+	obj.draw( vx + ox, vy + oy, 0, 1.0, 1.0, 0, 0, math.deg( theta )+180 )
+
+	--3.矢印のハンドル
+	obj.setfont( "MS UI Gothic", 34, 3, colorA, 0x000000 )
+	obj.load( "text", "・" )
+	obj.draw( vx, vy )
+
+	--4.「初期速度」
+	obj.setfont( "MS UI Gothic", 20, 3, colorA, 0x000000 )
+	obj.load( "text", "初期速度" )
+	obj.draw( vx + ox, vy - 25 + oy )
+
+	--5.初期位置の中心を表す点
+	obj.setfont( "MS UI Gothic", 34, 3, colorB, 0x000000 )
+	obj.load( "text", "・" )
+	obj.draw( ox, oy )
+
+	--6.「初期位置」
+	obj.setfont( "MS UI Gothic", 20, 3, colorB, 0x000000 )
+	obj.load( "text", "初期位置" )
+	obj.draw( ox, 20 + oy )
+end
+
+
+
+
+
+
+@AP21_地形オブジェクト_生成１
+--track0:サイズX,1,500,50,1
+--track1:サイズY,1,500,50,1
+--track2:位置X,-2000,2000,0,0.1
+--track3:位置Y,-2000,2000,0,0.1
+
+--dialog:図形/fig,shape="AviPhysics2D_四角形";摩擦係数(0～1),friction=0.5;反発係数(0～1),restitution=0.8;
+
+----------local variables
+local i = tostring(obj.layer)
+local sizeX = obj.track0
+local sizeY = obj.track1
+--local posX = obj.track2 + obj.ox
+--local posY = obj.track3 + obj.oy
+ap21Objects[i].staticPosX = obj.track2
+ap21Objects[i].staticPosY = obj.track3
+local angleZ = obj.rz
+local scale = 100
+
+----------global variables ( for debug )
+--ap21Objects = {}
+--ap21Objects[i] = {}
+
+----------functions
+function drawMessage( str )
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	local width = obj.w / 2
+	local height = obj.h / 2
+	obj.load( "figure", "四角形",0xff00ff, 1 )
+	obj.drawpoly(
+		-width, -height, 0,
+		width, -height, 0,
+		width, height, 0,
+		-width, height, 0
+	)
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	obj.draw()
+end
+
+----------set parameters
+ap21Objects[ i ].existSwitch = not ap21Objects[ i ].existSwitch
+ap21Objects[ i ].type = ap21_OBJECT_STATIC
+if( shape == "AviPhysics2D_四角形" ) then
+	ap21Objects[ i ].shape = ap21_SHAPE_BOX
+elseif( shape == "AviPhysics2D_円" ) then
+	ap21Objects[ i ].shape = ap21_SHAPE_SPHERE
+elseif( shape == "AviPhysics2D_カプセル" ) then
+	ap21Objects[ i ].shape = ap21_SHAPE_CAPSULE
+elseif( shape == "AviPhysics2D_三角形" ) then
+	ap21Objects[ i ].shape = ap21_SHAPE_CONE
+else
+	drawMessage( "「図形」の値がおかしいよ！" )
+end
+ap21Objects[ i ].sizeX = sizeX / scale
+ap21Objects[ i ].sizeY = sizeY / scale
+--ap21Objects[ i ].ox = posX / scale
+--ap21Objects[ i ].oy = posY / scale
+--ap21Objects[ i ].rz = math.rad( angleZ )
+if( ap21FlagUseCommonFriction ) then
+	ap21Objects[ i ].friction = ap21CommonFriction
+else
+	if( type( friction ) ~= "number" ) then
+		drawMessage( "「摩擦係数」の値が文字になってるよ！" )
+		ap21Objects[ i ].friction = 0.5
+	else
+		if( friction < 0 or friction > 1 ) then
+			drawMessage( "「摩擦係数」は0から1の範囲で指定してください" )
+			ap21Objects[ i ].friction = 0.5
+		else	
+			ap21Objects[ i ].friction = friction
+		end
+	end
+end
+if( ap21FlagUseCommonRestitution ) then
+	ap21Objects[ i ].restitution = ap21CommonRestitution
+else
+	if( type( restitution ) ~= "number" ) then
+		drawMessage( "「反発係数」の値が文字になってるよ！" )
+		ap21Objects[ i ].restitution = 0.8
+	else
+		if( friction < 0 or friction > 1 ) then
+			drawMessage( "「反発係数」は0から1の範囲で指定してください" )
+			ap21Objects[ i ].restitution = 0.8
+		else	
+			ap21Objects[ i ].restitution = restitution
+		end
+	end
+end
+
+if(
+	obj.getoption( "track_mode", 0 ) ~= 0 or
+	obj.getoption( "track_mode", 1 ) ~= 0
+) then
+	drawMessage( "「サイズX,Y」の時間変化はできません" )
+end
+
+
+
+@AP21_地形オブジェクト_生成２
+--track0:公転角度,-3600,3600,0,0.01
+--track1:公転ｽﾞﾚX,-2000,2000,0,0.1
+--track2:公転ｽﾞﾚY,-2000,2000,0,0.1
+--track3:楕円軌道,0,1000,1,0.01
+
+----------local variables
+local i = tostring(obj.layer)
+ap21Objects[i].staticRevAngle = obj.track0
+ap21Objects[i].staticRevX = obj.track1
+ap21Objects[i].staticRevY = obj.track2
+ap21Objects[i].staticRevScale = obj.track3
+
+
+
+
+@AP21_地形オブジェクト_生成３
+--track0:自転角度,-360,360,0,0.01
+--track1:自転ｽﾞﾚX,-2000,2000,0,0.1
+--track2:自転ｽﾞﾚY,-2000,2000,0,0.1
+--track3:楕円軌道,0,1000,1,0.01
+
+----------local variables
+
+--rotationは自転、revolutionは公転
+
+local i = tostring(obj.layer)
+local posX = ap21Objects[i].staticPosX
+local posY = ap21Objects[i].staticPosY
+local revAngle = ap21Objects[i].staticRevAngle
+local revX = ap21Objects[i].staticRevX
+local revY = ap21Objects[i].staticRevY
+local rotAngle = obj.track0
+local rotX = obj.track1
+local rotY = obj.track2
+local scale = 100
+
+local theta = math.rad( revAngle )
+local phi = math.rad( rotAngle )
+
+local sinTheta = math.sin( theta )
+local cosTheta = math.cos( theta )
+local sinPhi = math.sin( phi )
+local cosPhi = math.cos( phi )
+local sinThetaPhi = math.sin( theta + phi )
+local cosThetaPhi = math.cos( theta + phi )
+
+local revS = ap21Objects[i].staticRevScale
+local rotS = obj.track3
+
+ap21Objects[ i ].ox = ((rotX*(cosTheta*cosPhi - rotS*sinTheta*sinPhi) + rotY*(-cosTheta*sinPhi - rotS*sinTheta*cosPhi) + (revX*cosTheta - revY*sinTheta)) + posX) / scale
+ap21Objects[ i ].oy = ((rotX*(revS*sinTheta*cosPhi - revS*rotS*cosTheta*sinPhi) + rotY*(-revS*sinTheta*sinPhi + revS*rotS*cosTheta*cosPhi) + (revX*revS*sinTheta + revY*revS*cosTheta)) + posY)/ scale
+ap21Objects[ i ].rz = theta + phi
+
+
+
+
+@AP21_地形オブジェクト_描画
+--track0:X,-2000,2000,0,0.1
+--track1:Y,-2000,2000,0,0.1
+--track2:拡大率,0,800,100,0.01
+--track3:回転,-360,360,0,0.01
+
+--check0:衝突図形でクリッピング,1
+
+--dialog:下地を描画する/chk,flagDrawBase=1;下地の色/col,color=0xff00ff;下地の透明度,baseAlpha=0;▲の角を丸くする/chk,flagRoundCone=0;
+
+----------functions
+function drawMessage( str )
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	local width = obj.w / 2
+	local height = obj.h / 2
+	obj.load( "figure", "四角形",0xff00ff, 1 )
+	obj.drawpoly(
+		-width, -height, 0,
+		width, -height, 0,
+		width, height, 0,
+		-width, height, 0
+	)
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	obj.draw()
+end
+
+----------local variables
+local i = tostring(obj.layer)
+local scale = 100
+local sizeX = scale * ap21Objects[ i ].sizeX
+local sizeY = scale * ap21Objects[ i ].sizeY
+local shape = ap21Objects[ i ].shape
+
+local imagePosX = obj.track0
+local imagePosY = obj.track1
+local imageZoom = obj.track2
+local imageAngle = obj.track3
+local flagClipping = obj.check0
+local thisFrame = obj.frame
+local isSaving = obj.getinfo( "saving" )
+
+local roundSizeOffset = 1
+
+--debug_print( "地形オブジェクト_描画" )
+
+if( type( baseAlpha ) ~= "number" ) then
+	drawMessage( "「下地の透明度」の値が文字になってるよ！" )
+	baseAlpha = 0
+end
+
+if( flagClipping ) then
+	--最大ｻｲｽﾞの図形を収められる大きさ
+	--このサイズが重さに一番影響してるようだ。ので、動的に計算することにする
+	local w = 800
+	local h = 800
+
+	if( shape == ap21_SHAPE_BOX ) then
+		w = sizeX
+		h = sizeY
+	elseif( shape == ap21_SHAPE_SPHERE ) then
+		w = sizeX + roundSizeOffset
+		h = sizeX + roundSizeOffset
+	elseif( shape == ap21_SHAPE_CAPSULE ) then
+		w = sizeX
+		h = sizeX + sizeY
+	elseif( shape == ap21_SHAPE_CONE ) then
+		local theta = math.atan2( 2 * sizeY, sizeX )
+		local a = 4 / math.sin( theta ) + 2 * sizeX / sizeY
+		local b = 4 / math.cos( theta )
+		w = sizeX + 2*a
+		h = sizeY + b + 0.8*sizeY
+	else
+
+	end
+
+
+	--①ハンバーグを下処理してキャッシュaaaに退避
+	obj.setoption( "drawtarget", "tempbuffer", w, h )
+
+	obj.draw( imagePosX, imagePosY, 0, imageZoom/100, 1.0, 0, 0, imageAngle )
+
+	obj.copybuffer( "cache:aaa", "tmp" )
+
+	--②好きな形のバンズを作ってキャッシュbbbに退避
+	obj.setoption( "drawtarget", "tempbuffer", w, h )
+	
+----------draw figures here
+if( shape == ap21_SHAPE_BOX ) then
+	obj.load( "figure", "四角形", color, 1 )
+	local x = sizeX / 2
+	local y = sizeY / 2
+	
+	obj.drawpoly(
+		-x,	y,	0,
+		x,	y,	0,
+		x,	-y,	0,
+		-x,	-y,	0
+	)
+elseif( shape == ap21_SHAPE_SPHERE ) then
+	obj.load( "figure", "円", color, math.ceil(sizeX + roundSizeOffset) )
+	--local size = sizeX
+	obj.draw()
+	--obj.setfont( "MS UI Gothic", size*0.8, 3, 0xffffff, 0x000000 )
+	--obj.load("text","あ")
+	--obj.draw()
+elseif( shape == ap21_SHAPE_CAPSULE ) then
+	sizeX = sizeX + roundSizeOffset
+
+	obj.load( "figure", "円", color, sizeX )
+	--obj.setoption( "antialias", 0 )
+
+	local x = math.ceil( sizeX / 2 )
+	local y = math.ceil( sizeY / 2 )
+	local offset = 0
+	if( (sizeX+sizeY) % 2 == 0 ) then
+		offset = -0.5
+	end
+
+	--四角形
+	obj.drawpoly(
+		-x,	y,	0,
+		x,	y,	0,
+		x,	-y,	0,
+		-x,	-y,	0,
+		0,x,	sizeX,x,	sizeX,x,	0,x
+	)
+	--上の円
+	obj.drawpoly(
+		-x,	y+x+offset,	0,
+		x,	y+x+offset,	0,
+		x,	y+offset,	0,
+		-x,	y+offset,	0,
+		0,0,	sizeX,0,	sizeX,x,	0,x
+	)
+	--下の円
+	obj.drawpoly(
+		-x,	-(y+offset),	0,
+		x,	-(y+offset),	0,
+		x,	-(y+x+offset),	0,
+		-x,	-(y+x+offset),	0,
+		0,x,	sizeX,x,	sizeX,sizeX,	0,sizeX
+	)
+elseif( shape == ap21_SHAPE_CONE ) then
+	if( flagRoundCone == 1 ) then
+	-----画度が丸い三角形を作る
+		local theta = math.atan2( 2 * sizeY, sizeX )
+
+		--土台の三角形を描画
+		obj.load( "figure", "四角形", color, 1 )
+		obj.drawpoly(
+			0,	0.75*sizeY,	0,
+			0,	0.75*sizeY,	0,
+			0.5*sizeX,	-0.25*sizeY,	0,
+			-0.5*sizeX,	-0.25*sizeY,	0
+		)
+
+		local m = 8
+		local h = m / 2
+
+		--頂点の丸を描画
+		obj.load( "figure", "8dotCircle", color, m )
+		obj.setoption( "antialias", 1 )
+		obj.drawpoly(
+				0 - h,	0.75*sizeY + h,	0,
+				0 + h,	0.75*sizeY + h,	0,
+				0 + h,	0.75*sizeY - h,	0,
+				0 - h,	0.75*sizeY - h,	0,
+			0,0,	m,0,	m,m,	0,m
+		)
+		obj.drawpoly(
+				0.5*sizeX - h,	-0.25*sizeY + h,	0,
+				0.5*sizeX + h,	-0.25*sizeY + h,	0,
+				0.5*sizeX + h,	-0.25*sizeY - h,	0,
+				0.5*sizeX - h,	-0.25*sizeY - h,	0,
+			0,0,	m,0,	m,m,	0,m
+		)
+		obj.drawpoly(
+				-0.5*sizeX - h,	-0.25*sizeY + h,	0,
+				-0.5*sizeX + h,	-0.25*sizeY + h,	0,
+				-0.5*sizeX + h,	-0.25*sizeY - h,	0,
+				-0.5*sizeX - h,	-0.25*sizeY - h,	0,
+			0,0,	m,0,	m,m,	0,m
+		)
+
+		--埋める棒を三つ描画
+		local theta = math.atan2( 2*sizeY, sizeX )
+
+		obj.load( "figure", "四角形", color, m )
+		--下の棒は簡単
+		obj.drawpoly(
+				-0.5*sizeX,	-0.25*sizeY + h,	0,
+				0.5*sizeX,	-0.25*sizeY + h,	0,
+				0.5*sizeX,	-0.25*sizeY - h,	0,
+				-0.5*sizeX,	-0.25*sizeY - h,	0,
+			h,0,	h,0,	h,m,	h,m
+		)
+
+		--斜めの棒は厄介。回転行列とシフト行列で位置を割り出す
+		local sin = math.sin( theta )
+		local cos = math.cos( theta )
+		--棒の大きさの半分（幾何計算より）
+		local x0 = sizeY / (2 * sin)
+		local y0 = h
+		--棒の中心位置（幾何計算より）
+		local Tx = - sizeX / 4
+		local Ty =   sizeY / 4
+
+		obj.setoption( "antialias", 1 )
+		--回転＋シフト。数学の大勝利である。
+		obj.drawpoly(
+				cos*(-x0) -sin*(y0) + Tx,	sin*(-x0) +cos*(y0) + Ty,	0,
+				cos*(x0) -sin*(y0) + Tx,	sin*(x0) +cos*(y0) + Ty,	0,
+				cos*(x0) -sin*(-y0) + Tx,	sin*(x0) +cos*(-y0) + Ty,	0,
+				cos*(-x0) -sin*(-y0) + Tx,	sin*(-x0) +cos*(-y0) + Ty,	0,
+			h,0,	h,0,	h,m,	h,m
+		)
+		sin = math.sin( - theta )
+		cos = math.cos( - theta )
+		Tx = sizeX / 4
+		obj.drawpoly(
+				cos*(-x0) -sin*(y0) + Tx,	sin*(-x0) +cos*(y0) + Ty,	0,
+				cos*(x0) -sin*(y0) + Tx,	sin*(x0) +cos*(y0) + Ty,	0,
+				cos*(x0) -sin*(-y0) + Tx,	sin*(x0) +cos*(-y0) + Ty,	0,
+				cos*(-x0) -sin*(-y0) + Tx,	sin*(-x0) +cos*(-y0) + Ty,	0,
+			h,0,	h,0,	h,m,	h,m
+		)
+	else
+	----標準三角形
+		obj.load( "figure", "四角形", color, 1 )
+
+		local theta = math.atan2( 2 * sizeY, sizeX )
+		local a = 4 / math.sin( theta ) + 2 * sizeX / sizeY
+		local b = 4 / math.cos( theta )
+	
+		obj.drawpoly(
+			0,	0.75*sizeY + b,	0,
+			0,	0.75*sizeY + b,	0,
+			0.5*sizeX + a,	-0.25*sizeY - 4,	0,
+			-0.5*sizeX - a,	-0.25*sizeY - 4,	0
+		)
+	end
+else
+	--図形の指定がおかしいよ！
+end
+----------end draw figures
+
+	obj.copybuffer( "cache:bbb", "tmp" )
+
+	--③ハンバーガー作成
+	obj.setoption( "drawtarget", "tempbuffer", w, h )
+	--バンズ（下）
+	if( flagDrawBase == 1 ) then
+		obj.copybuffer( "obj", "cache:bbb" )
+		obj.draw()
+	end
+
+	--ハンバーグ
+	obj.copybuffer( "obj", "cache:aaa" )
+	obj.draw()
+
+	--マスク処理したバンズ（上）をのせる
+	obj.copybuffer( "obj", "cache:bbb" )
+	obj.effect( "反転", "透明度反転", 1 )
+	obj.setoption( "blend", "alpha_sub" )
+	obj.draw()
+
+	--obj.copybuffer( "cache:ccc", "tmp" )
+
+	--④できあがり
+	obj.load( "tempbuffer" )
+
+	--get parameters
+	obj.ox = scale * ap21Objects[ i ].ox
+	obj.oy = scale * ap21Objects[ i ].oy
+	obj.rz = math.deg( ap21Objects[ i ].rz + math.pi ) - 180
+	if( shape == ap21_SHAPE_CONE ) then
+		--解説：円錐の重心は下から1/4だからそれに合わせて描画したのに、Bullet内部ではどうも重心は下から1/2っぽい。ふざけんな！
+		obj.cy = sizeY / 4
+	end
+
+	if( ap21FlagShowGuide and thisFrame == 0 and (not isSaving) ) then
+		--これをすると以降のエフェクトがかけられなくなる
+		obj.setoption( "drawtarget", "framebuffer" )
+	end
+
+	--draw!
+	obj.draw()
+else
+	-----just draw the image
+	obj.ox = scale * ap21Objects[ i ].ox
+	obj.oy = scale * ap21Objects[ i ].oy
+	obj.rz = math.deg( ap21Objects[ i ].rz + math.pi ) - 180
+
+	obj.draw( imagePosX, imagePosY, 0, imageZoom/100, 1.0, 0, 0, imageAngle )
+end
+
+
+--もうスクリプトのサイズ（上限32KB）が限界...

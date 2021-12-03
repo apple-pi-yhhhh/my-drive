@@ -1,0 +1,54 @@
+--track0:起点X,-2000,2000,0
+--track1:起点Y,-2000,2000,0
+--track2:速度,0,100,20
+--track3:角度,-360,360,0
+--dialog:粒子速度,v_g=1.0;拡大速度,v_z=1.0;
+px = obj.track0
+py = obj.track1
+v = obj.track2/5
+vx = math.sin(obj.track3*math.pi/180)*v*v_g
+vy = -math.cos(obj.track3*math.pi/180)*v*v_g
+time = obj.time*v*v_z*20
+obj.pixeloption("type","yc")
+obj.pixeloption("put","frm")
+w,h = obj.getpixel()
+src_x,src_y = obj.putpixel()
+src_x = math.floor(src_x/2-w/2+obj.x)
+src_y = math.floor(src_y/2-h/2+obj.y)
+px = px + w/2;
+py = py + h/2;
+
+obj.pixeloption("blend",0)
+for y=0,h-1 do
+for x=0,w-1 do
+  ox = x-px
+  oy = y-py
+  now = math.sqrt(ox*ox+oy*oy)-time
+  if( now >= 0 ) then
+    obj.copypixel(x+src_x,y+src_y,x,y)
+  end
+end
+end
+
+obj.pixeloption("blend",1)
+for y=0,h-1 do
+for x=0,w-1 do
+  ox = x-px
+  oy = y-py
+  now = math.sqrt(ox*ox+oy*oy)-time
+  if( now < 0 ) then
+	now = now*now/v_z
+    vx2 = vx+math.sin(math.pi*x/72)
+    vy2 = vy+math.cos(math.pi*y/64)
+    vx2 = vx2+math.sin(math.pi*x/20)
+    vy2 = vy2+math.cos(math.pi*y/16)
+    vx2 = vx2/64
+    vy2 = vy2/64 
+    obj.copypixel(x+src_x+vx2*now,y+src_y+vy2*now,x,y)
+  end
+end
+end
+
+obj.draw(4000,4000,0);	-- 見えてる部分に描画させないように…
+
+

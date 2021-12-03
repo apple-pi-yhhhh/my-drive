@@ -1,0 +1,342 @@
+@AP21_物理ワールド_生成
+--
+-- AviPhysics2D version 1
+--
+
+----------track bars and dialog box
+--track0:床位置,-2000,2000,150,0.1
+--track1:天井位置,-2000,2000,-150,0.1
+--track2:右壁位置,-2000,2000,150,0.1
+--track3:左壁位置,-2000,2000,-150,0.1
+
+--check0:ガイドを表示する,1
+--1行の文字数制限があるようだ。PYはPlusYPlaneの略
+--dialog:床を生成/chk,flagMakePY=1;床の摩擦係数,frictionPY=0.5;床の反発係数,restitutionPY=0.8;天井を生成/chk,flagMakeMY=1;天井の摩擦係数,frictionMY=0.5;天井の反発係数,restitutionMY=0.8;右側の壁を生成/chk,flagMakePX=1;右側壁摩擦係数,frictionPX=0.5;右側壁反発係数,restitutionPX=0.8;左側の壁を生成/chk,flagMakeMX=1;左側壁摩擦係数,frictionMX=0.5;左側壁反発係数,restitutionMX=0.8;
+
+local posPY = obj.track0
+local posMY = obj.track1
+local posPX = obj.track2
+local posMX = obj.track3
+
+----------global variables ( suffix: ap21厳守   AviPhysics2Dのversion1)
+ap21Init = ap21Init or false
+ap21Objects = ap21Objects or nil
+ap21Planes = ap21Planes or {}
+ap21ExistSwitchList = ap21ExistSwitchList or {}
+ap21Layer = 0
+ap21Frame = obj.frame
+ap21Framerate = obj.framerate
+ap21Scale = 100
+ap21FlagShowGuide = obj.check0
+
+ap21_OBJECT_NONE    = -1
+ap21_OBJECT_DYNAMIC = 1
+ap21_OBJECT_STATIC  = 2
+
+--DLLの列挙体にあわせること
+ap21_SHAPE_NONE     = -1
+ap21_SHAPE_BOX      = 1
+ap21_SHAPE_SPHERE   = 2
+ap21_SHAPE_CYLINDER = 3
+ap21_SHAPE_CAPSULE  = 4
+ap21_SHAPE_CONE     = 5
+
+
+----------functions
+function drawMessage( str )
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	local width = obj.w / 2
+	local height = obj.h / 2
+	obj.load( "figure", "四角形",0xff00ff, 1 )
+	obj.drawpoly(
+		-width, -height, 0,
+		width, -height, 0,
+		width, height, 0,
+		-width, height, 0
+	)
+	obj.setfont("MS UI Gothic",34,3,0xFFFFFF,0x000000)
+	obj.load("text", str)
+	obj.draw()
+end
+
+
+----------local variables
+local ap = require("AviPhysics2D_v1")
+
+-----set plane parameters
+--initObjects()で生成するので、initializationより先
+--ap21Planes = {}
+ap21Planes["PX"] = {
+	["flagMakePlane"] = flagMakePX,
+	["pos"] = posPX / ap21Scale,
+	["friction"] = frictionPX,
+	["restitution"] = restitutionPX
+}
+ap21Planes["MX"] = {
+	["flagMakePlane"] = flagMakeMX,
+	["pos"] = posMX / ap21Scale,
+	["friction"] = frictionMX,
+	["restitution"] = restitutionMX
+}
+ap21Planes["PY"] = {
+	["flagMakePlane"] = flagMakePY,
+	["pos"] = posPY / ap21Scale,
+	["friction"] = frictionPY,
+	["restitution"] = restitutionPY
+}
+ap21Planes["MY"] = {
+	["flagMakePlane"] = flagMakeMY,
+	["pos"] = posMY / ap21Scale,
+	["friction"] = frictionMY,
+	["restitution"] = restitutionMY
+}
+---------------------------------------------------------------
+if( type( frictionPX ) ~= "number" ) then
+	drawMessage( "「右側壁摩擦係数」の値が文字になってるよ" )
+	ap21Planes["PX"].friction = 0.5
+else
+	if( frictionPX < 0 or frictionPX > 1 ) then
+		drawMessage( "「右側壁摩擦係数」は0から1の範囲で指定してください" )
+		ap21Planes["PX"].friction = 0.5
+	end
+end
+if( type( frictionMX ) ~= "number" ) then
+	drawMessage( "「左側壁摩擦係数」の値が文字になってるよ" )
+	ap21Planes["MX"].friction = 0.5
+else
+	if( frictionMX < 0 or frictionMX > 1 ) then
+		drawMessage( "「左側壁摩擦係数」は0から1の範囲で指定してください" )
+		ap21Planes["MX"].friction = 0.5
+	end
+end
+if( type( frictionPY ) ~= "number" ) then
+	drawMessage( "「床の摩擦係数」の値が文字になってるよ" )
+	ap21Planes["PY"].friction = 0.5
+else
+	if( frictionPY < 0 or frictionPY > 1 ) then
+		drawMessage( "「床の摩擦係数」は0から1の範囲で指定してください" )
+		ap21Planes["PY"].friction = 0.5
+	end
+end
+if( type( frictionMY ) ~= "number" ) then
+	drawMessage( "「天井の摩擦係数」の値が文字になってるよ" )
+	ap21Planes["MY"].friction = 0.5
+else
+	if( frictionMY < 0 or frictionMY > 1 ) then
+		drawMessage( "「天井の摩擦係数」は0から1の範囲で指定してください" )
+		ap21Planes["MY"].friction = 0.5
+	end
+end
+---------------------------------------------------------------
+if( type( restitutionPX ) ~= "number" ) then
+	drawMessage( "「右側壁反発係数」の値が文字になってるよ" )
+	ap21Planes["PX"].restitution = 0.8
+else
+	if( restitutionPX < 0 or restitutionPX > 1 ) then
+		drawMessage( "「右側壁反発係数」は0から1の範囲で指定してください" )
+		ap21Planes["PX"].restitution = 0.8
+	end
+end
+if( type( restitutionMX ) ~= "number" ) then
+	drawMessage( "「左側壁反発係数」の値が文字になってるよ" )
+	ap21Planes["MX"].restitution = 0.8
+else
+	if( restitutionMX < 0 or restitutionMX > 1 ) then
+		drawMessage( "「左側壁反発係数」は0から1の範囲で指定してください" )
+		ap21Planes["MX"].restitution = 0.8
+	end
+end
+if( type( restitutionPY ) ~= "number" ) then
+	drawMessage( "「床の反発係数」の値が文字になってるよ" )
+	ap21Planes["PY"].restitution = 0.8
+else
+	if( restitutionPY < 0 or restitutionPY > 1 ) then
+		drawMessage( "「床の反発係数」は0から1の範囲で指定してください" )
+		ap21Planes["PY"].restitution = 0.8
+	end
+end
+if( type( restitutionMY ) ~= "number" ) then
+	drawMessage( "「天井の反発係数」の値が文字になってるよ" )
+	ap21Planes["MY"].restitution = 0.8
+else
+	if( restitutionMY < 0 or restitutionMY > 1 ) then
+		drawMessage( "「天井の反発係数」は0から1の範囲で指定してください" )
+		ap21Planes["MY"].restitution = 0.8
+	end
+end
+
+
+----------initialization
+if( not ap21Init ) then
+	ap21Init = true
+	--debug_print( "----------Initilization----------" )
+
+	-----initialization code here
+
+	--init objects table
+	ap21Objects = {}
+	for i = 1, 100, 1 do
+		--[1]ではなく["1"]として作成する（DLL側で取得するため）。参照も同様
+		ap21Objects[tostring(i)] = {
+			["existSwitch"] = false,
+			["type"] = ap21_OBJECT_NONE,
+			["shape"] = ap21_SHAPE_NONE,
+			["ox"] = 0,
+			["oy"] = 0,
+			["rz"] = 0,
+			["sizeX"] = 0,
+			["sizeY"] = 0,
+			["gravityX"] = 0,
+			["gravityY"] = 0,
+			["initPosX"] = 0,
+			["initPosY"] = 0,
+			["initVelocityX"] = 0,
+			["initVelocityY"] = 0,
+			["initAngle"] = 0,
+			["initAngularVelocity"] = 0,
+			["friction"] = 0,
+			["restitution"] = 0,
+			["mass"] = 0,
+			["initSizeX"] = 0, --自然オブジェクトでのみ使用
+			["initSizeY"] = 0, --自然オブジェクトでのみ使用
+			["staticPosX"] = 0, --地形オブジェクトでのみ使用：太陽の位置X
+			["staticPosY"] = 0, --地形オブジェクトでのみ使用：太陽の位置Y
+			["staticRevAngle"] = 0, --地形オブジェクトでのみ使用：太陽から見た地球の回転角度、すなわち公転角度
+			["staticRevX"] = 0, --地形オブジェクトでのみ使用：公転位置X
+			["staticRevY"] = 0, --地形オブジェクトでのみ使用：公転位置Y
+			["staticRevScale"] = 0 --地形オブジェクトでのみ使用：公転の楕円度（Xに対するYのスケール）
+		}
+		ap21ExistSwitchList[tostring(i)] = false
+	end
+
+	--init DLL
+	ap.initAviPhysics2D()
+end
+----------initialization end
+
+
+--debug_print( "----------AviPhysics2D_v1----------" )
+
+----------check existence of object
+for i = 1, 100, 1 do
+	if( ap21Objects[tostring(i)].existSwitch == ap21ExistSwitchList[tostring(i)] ) then
+		ap21Objects[tostring(i)].shape = ap21_SHAPE_NONE
+	end
+	ap21ExistSwitchList[tostring(i)] = ap21Objects[tostring(i)].existSwitch
+end
+
+
+----------update plane parameters(position)
+ap.updatePlaneData()
+
+
+----------update object parameters
+for i = 1, 100, 1 do
+	ap21Layer = i
+
+	ap.updateObjectData()
+end
+
+
+----------step simulation
+ap.stepSimulation()
+
+
+----------get simlation results
+local dummyZ = 0
+local dummyAngleX = 0
+local dummyAngleY = 0
+for i = 1, 100, 1 do
+	ap21Layer = i
+
+	ap21Objects[tostring(i)].ox,
+	ap21Objects[tostring(i)].oy,
+	dummyZ,
+	dummyAngleX,
+	dummyAngleY,
+	ap21Objects[tostring(i)].rz = ap.getSimulationResult()
+end
+
+
+----------draw guides
+--なぜか直接比較すると失敗したので一度変数に置く
+local isSaving = obj.getinfo( "saving" )
+if( ap21FlagShowGuide and (not isSaving) ) then
+	local w = obj.screen_w
+	local h = obj.screen_h
+	local w2 = w / 2
+	local h2 = h / 2
+	local pos = posPX
+	local width = 5
+	
+	local bufferW = 2 * (math.max( math.abs(posPX), math.abs(posMX) ) + 24)
+	local bufferH = 2 * (math.max( math.abs(posPY), math.abs(posMY) ) + 24)
+	--アニメーション効果の影響を受けるには、ひとつのオブジェクトとしてまとまっている必要があるみたい？
+	--こうしないと、そもそもアニメーション効果側のスクリプトが全く実行されない。つまり「詳細設定」が機能しない
+	obj.setoption( "drawtarget", "tempbuffer", bufferW, bufferH )
+
+	if( flagMakePX == 1 ) then
+		pos = posPX
+		obj.load( "figure", "四角形", 0xff00ff, 1 )
+		obj.drawpoly(
+			pos,		-h2,	0,
+			pos+width,	-h2,	0,
+			pos+width,	h2,	0,
+			pos,		h2,	0,
+			0,0,	1,0,	1,1,	0,1
+		)
+		obj.setfont( "MS UI Gothic", 24, 3, 0xffffff, 0x000000 )
+		obj.load( "text", "右側の壁" )
+		obj.draw( pos+12, 0, 0, 1.0, 1.0, 0, 0, 90 )
+	end
+	if( flagMakeMX == 1 ) then
+		pos = posMX
+		obj.load( "figure", "四角形", 0xff00ff, 1 )
+		obj.drawpoly(
+			pos-width,	-h2,	0,
+			pos,		-h2,	0,
+			pos,		h2,	0,
+			pos-width,	h2,	0,
+			0,0,	1,0,	1,1,	0,1
+		)
+		obj.setfont( "MS UI Gothic", 24, 3, 0xffffff, 0x000000 )
+		obj.load( "text", "左側の壁" )
+		obj.draw( pos-12, 0, 0, 1.0, 1.0, 0, 0, -90 )
+	end
+	if( flagMakePY == 1 ) then
+		pos = posPY
+		obj.load( "figure", "四角形", 0xff00ff, 1 )
+		obj.drawpoly(
+			-w2,	pos,		0,
+			w2,	pos,		0,
+			w2,	pos+width,	0,
+			-w2,	pos+width,	0,
+			0,0,	1,0,	1,1,	0,1
+		)
+		obj.setfont( "MS UI Gothic", 24, 3, 0xffffff, 0x000000 )
+		obj.load( "text", "床" )
+		obj.draw( 0, pos+12, 0, 1.0, 1.0, 0, 0, 180 )
+	end
+	if( flagMakeMY == 1 ) then
+		pos = posMY
+		obj.load( "figure", "四角形", 0xff00ff, 1 )
+		obj.drawpoly(
+			-w2,	pos-width,	0,
+			w2,	pos-width,	0,
+			w2,	pos,		0,
+			-w2,	pos,		0,
+			0,0,	1,0,	1,1,	0,1
+		)
+		obj.setfont( "MS UI Gothic", 24, 3, 0xffffff, 0x000000 )
+		obj.load( "text", "天井" )
+		obj.draw( 0, pos-12, 0, 1.0, 1.0, 0, 0, 0 )
+	end
+
+	obj.load( "tempbuffer" )
+else
+	--アニメーション効果の影響を受けるには、ひとつのオブジェクトとしてまとまっている必要があるみたい？
+	--こうしないと、そもそもアニメーション効果側のスクリプトが全く実行されない。つまり「詳細設定」が機能しない
+	obj.setoption( "drawtarget", "tempbuffer", 1, 1 )
+	obj.load( "tempbuffer" )
+end

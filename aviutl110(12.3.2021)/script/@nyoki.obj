@@ -1,0 +1,229 @@
+@にょきにょき2D
+--track0:制御点,2,16,3,1
+--track1:表示数,1,16,1,1
+--track2:太さ,1,32,16,1
+--track3:速度,0,2000,100,0.01
+--dialog:開始色/col,col0=0xffffff;終了色/col,col1=0x00ff00;座標,pos={0,50,0,-300,150,-200};拡大描画,dz=2;
+function draw(x0,y0,z0,x1,y1,z1,x2,y2,z2,t,r,c0,c1)
+	local x,y,z,i,l,n,p,t0,t1,t2,c,s,r0,g0,b0,r1,g1,b1
+	if( t <= 0 ) then
+		return
+	end
+	x = x1-x0
+	y = y1-y0
+	z = z1-z0
+	n = math.sqrt(x*x+y*y+z*z)/4
+	x = x2-x1
+	y = y2-y1
+	z = z2-z1
+	n = n+math.sqrt(x*x+y*y+z*z)/4
+	x = x2-x0
+	y = y2-y0
+	z = z2-z0
+	n = n+math.sqrt(x*x+y*y+z*z)/2
+	n = math.ceil(n)
+	if( n <= 0 ) then
+		n = 1
+	end
+	r0,g0,b0 = RGB(col0)
+	r1,g1,b1 = RGB(col1)
+	r1 = r1-r0
+	g1 = g1-g0
+	b1 = b1-b0
+	c1 = (c1-c0)/n
+	if( r ~= 0 ) then
+		s = math.sin(r)
+		c = math.cos(r)
+		x = x0
+		z = z0
+		x0 = c*x-s*z
+		z0 = s*x+c*z
+		x = x1
+		z = z1
+		x1 = c*x-s*z
+		z1 = s*x+c*z
+		x = x2
+		z = z2
+		x2 = c*x-s*z
+		z2 = s*x+c*z
+	end
+	for i=0,n-1 do
+		p = i/n
+		t0 = (1-p)*(1-p)
+		t1 = 2*p*(1-p)
+		t2 = p*p
+		x = t0*x0+t1*x1+t2*x2
+		y = t0*y0+t1*y1+t2*y2
+		z = t0*z0+t1*z1+t2*z2
+		if( col0 ~= col1 ) then
+			c = RGB(r0+r1*c0,g0+g1*c0,b0+b1*c0)
+			obj.effect("グラデーション","color",c,"color1",c)
+			c0 = c0+c1
+		end
+		if( t < 1 ) then
+			obj.draw(x,y,z,dz*t)
+		else
+			obj.draw(x,y,z,dz)
+		end
+		t = t-1/n
+		if( t <= 0 ) then
+			return
+		end
+	end
+end
+obj.load("figure","円",col0,math.ceil(obj.track2/dz))
+obj.setoption("billboard",3)
+num = obj.track0
+obj.setanchor("pos",num,"line")
+n = 2
+p = obj.track1
+x0 = pos[(num-2)*n+1]
+y0 = pos[(num-2)*n+2]
+x1 = pos[(num-1)*n+1]
+y1 = pos[(num-1)*n+2]
+pos[num*n+1] = x1+(x1-x0)
+pos[num*n+2] = y1+(y1-y0)
+x2 = pos[1]
+y2 = pos[2]
+x3 = pos[1]
+y3 = pos[2]
+for i=0,num-1 do
+	s = (i+1)*n+1
+	x0 = x2
+	y0 = y2
+	x1 = x3
+	y1 = y3
+	x3 = pos[s+0]
+	y3 = pos[s+1]
+	x2 = (x1+x3)/2
+	y2 = (y1+y3)/2
+	t = obj.track3/100*obj.time
+	if( t > num-0.5 ) then
+		t = num-0.5
+	end
+	t = t-i
+	for j=0,p-1 do
+		draw(x0,y0,0,x1,y1,0,x2,y2,0,t,math.pi*2*j/p,i/num,(i+1)/num)
+	end
+end
+obj.draw(0,0,0,0,0)
+
+@にょきにょき3D
+--track0:制御点,2,16,3,1
+--track1:表示数,1,16,1,1
+--track2:太さ,1,32,16,1
+--track3:速度,0,2000,100,0.01
+--dialog:開始色/col,col0=0xffffff;終了色/col,col1=0x00ff00;座標,pos={0,50,0,0,-300,0,150,-200,0};拡大描画,dz=2;
+function draw(x0,y0,z0,x1,y1,z1,x2,y2,z2,t,r,c0,c1)
+	local x,y,z,i,l,n,p,t0,t1,t2,c,s,r0,g0,b0,r1,g1,b1
+	if( t <= 0 ) then
+		return
+	end
+	x = x1-x0
+	y = y1-y0
+	z = z1-z0
+	n = math.sqrt(x*x+y*y+z*z)/4
+	x = x2-x1
+	y = y2-y1
+	z = z2-z1
+	n = n+math.sqrt(x*x+y*y+z*z)/4
+	x = x2-x0
+	y = y2-y0
+	z = z2-z0
+	n = n+math.sqrt(x*x+y*y+z*z)/2
+	n = math.ceil(n)
+	if( n <= 0 ) then
+		n = 1
+	end
+	r0,g0,b0 = RGB(col0)
+	r1,g1,b1 = RGB(col1)
+	r1 = r1-r0
+	g1 = g1-g0
+	b1 = b1-b0
+	c1 = (c1-c0)/n
+	if( r ~= 0 ) then
+		s = math.sin(r)
+		c = math.cos(r)
+		x = x0
+		z = z0
+		x0 = c*x-s*z
+		z0 = s*x+c*z
+		x = x1
+		z = z1
+		x1 = c*x-s*z
+		z1 = s*x+c*z
+		x = x2
+		z = z2
+		x2 = c*x-s*z
+		z2 = s*x+c*z
+	end
+	for i=0,n-1 do
+		p = i/n
+		t0 = (1-p)*(1-p)
+		t1 = 2*p*(1-p)
+		t2 = p*p
+		x = t0*x0+t1*x1+t2*x2
+		y = t0*y0+t1*y1+t2*y2
+		z = t0*z0+t1*z1+t2*z2
+		if( col0 ~= col1 ) then
+			c = RGB(r0+r1*c0,g0+g1*c0,b0+b1*c0)
+			obj.effect("グラデーション","color",c,"color1",c)
+			c0 = c0+c1
+		end
+		if( t < 1 ) then
+			obj.draw(x,y,z,dz*t)
+		else
+			obj.draw(x,y,z,dz)
+		end
+		t = t-1/n
+		if( t <= 0 ) then
+			return
+		end
+	end
+end
+obj.load("figure","円",col0,math.ceil(obj.track2/dz))
+obj.setoption("billboard",3)
+num = obj.track0
+obj.setanchor("pos",num,"line","xyz")
+n = 3
+p = obj.track1
+x0 = pos[(num-2)*n+1]
+y0 = pos[(num-2)*n+2]
+z0 = pos[(num-2)*n+3]
+x1 = pos[(num-1)*n+1]
+y1 = pos[(num-1)*n+2]
+z1 = pos[(num-1)*n+3]
+pos[num*n+1] = x1+(x1-x0)
+pos[num*n+2] = y1+(y1-y0)
+pos[num*n+3] = z1+(z1-z0)
+x2 = pos[1]
+y2 = pos[2]
+z2 = pos[3]
+x3 = pos[1]
+y3 = pos[2]
+z3 = pos[3]
+for i=0,num-1 do
+	s = (i+1)*n+1
+	x0 = x2
+	y0 = y2
+	z0 = z2
+	x1 = x3
+	y1 = y3
+	z1 = z3
+	x3 = pos[s+0]
+	y3 = pos[s+1]
+	z3 = pos[s+2]
+	x2 = (x1+x3)/2
+	y2 = (y1+y3)/2
+	z2 = (z1+z3)/2
+	t = obj.track3/100*obj.time
+	if( t > num-0.5 ) then
+		t = num-0.5
+	end
+	t = t-i
+	for j=0,p-1 do
+		draw(x0,y0,z0,x1,y1,z1,x2,y2,z2,t,math.pi*2*j/p,i/num,(i+1)/num)
+	end
+end
+obj.draw(0,0,0,0,0)
+

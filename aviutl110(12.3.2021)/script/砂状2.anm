@@ -1,0 +1,15 @@
+--track0:起点X,-2000,2000,0
+--track1:起点Y,-2000,2000,0
+--track2:速度,0,100,20
+--track3:角度,-360,360,0
+--dialog:粒子速度,v_g=1.0;拡大速度,v_z=1.0;
+
+func = package.loadlib(obj.getinfo("script_path").."sunajou2.dll", "func")
+if( func == nil ) then return end
+
+obj.effect("オフスクリーン描画")
+func()
+-- オフスクリーン描画のキャンセル
+obj.load("figure","四角形",0,0);
+obj.alpha=0
+
