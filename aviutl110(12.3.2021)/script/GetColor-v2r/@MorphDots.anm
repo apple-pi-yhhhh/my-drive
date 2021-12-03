@@ -1,0 +1,958 @@
+--------------------------------------------------------------------------------
+@MorphDots [Option]
+--track0:Lineplog,-100,100,0,0.01
+--track1:Linedelay,0,100,0,0.01
+--track2:BlendOrg,0,100,0
+--track3:Extrude,-2000,2000,0
+--check0:透明度二値,0
+--dialog:Rotation/chk,local rot=0;ドット交互/chk,local alt=1;Z-Copies,local z_num=0;Z-Rotation,local z_rot=0;ShuffleIndex,local shuffle=0;billboard/chk,local bil=1;Borderoffset,local offset_border=3;└ position/chk,local thin=0;ColRandom,local randcol=0;
+--------------------------------------------------------------------------------
+MorphDotsOption = MorphDotsOption or {}
+if not tostring(randcol):find("table:") then
+	randcol = {randcol,randcol,randcol}
+end
+randcol[2] = randcol[2] or randcol[1]
+randcol[3] = randcol[3] or randcol[1]
+MorphDotsOption.alphabin = (obj.check0 and 1) or 0
+MorphDotsOption.alternate = alt
+MorphDotsOption.rot = rot
+MorphDotsOption.z_num = z_num
+MorphDotsOption.z_rot = z_rot
+MorphDotsOption.extrude = obj.track3
+MorphDotsOption.indexshuffle = shuffle
+MorphDotsOption.billboard = bil*3
+MorphDotsOption.offset_border = offset_border
+MorphDotsOption.thin_border = offset_border*(thin or 0)
+MorphDotsOption.alphablend = obj.track2*0.01
+MorphDotsOption.lineprog  = obj.track0*0.01
+MorphDotsOption.linedelay  = obj.track1*0.01
+MorphDotsOption.randcolor = {randcol[1]*0.01,randcol[2]*0.01,randcol[3]*0.01}
+
+--------------------------------------------------------------------------------
+@MorphDots [Noise]
+--track0:Scale,0.01,500,80,0.01
+--track1:lacunary,0,500,100,0.01
+--track2:gain,0,100,25,0.01
+--track3:Amplitude,-5000,5000,0
+--dialog:AffectPos,local afpos=100;└ color,local afcol=0; └ alpha,local afalp=0;└ zoom,local afzm=0;Noisescale,local scl={1,  1,  1};└ octaves,local oct=1;└ wind,local offset={0, 0, 0};└ UV⇔gloal/chk,local glo=1;Layerfield/chk,local uselayer=0;└ Layer,local layer={};└[radius/fall],local rad={300,100};Effect(self)/chk,local fxs=0;
+--------------------------------------------------------------------------------
+local Layerfield = function() return 1 end
+local function Sub(a,b) return {a[1]-b[1],a[2]-b[2],a[3]-b[3]} end
+local function Length(v) return (v[1]*v[1]+v[2]*v[2]+v[3]*v[3])^0.5 end
+local function Clamp(x) return (x<=0 and 0) or (x>=1 and 1) or x end
+local function Smooth(t,a,b,A,B) local v = Clamp((t-a)/(b-a)) return v*v*(3-2*v)*(B-A)+A end
+if (uselayer==1) then
+	local gv = obj.getvalue
+	layer = layer or {}
+	local function Gl(l)
+		l = ("layer"..l)
+		if gv(l..".x") then
+			return
+			{
+				pos   = {gv(l..".x"),gv(l..".y"),gv(l..".z")},
+				rot   = {gv(l..".rx"),gv(l..".ry"),gv(l..".rz")},
+				zoom  = gv(l..".zoom"),
+				alpha = gv(l..".alpha")
+			}
+		end
+		return false
+	end
+
+	local function GL(t)
+		local ret = {}
+		for i=1,#t do
+			local layer = Gl(t[i])
+			if (layer) then
+				table.insert(ret,layer)
+			end
+		end
+		return ret
+	end
+
+	local radius,falloff = rad[1],rad[2] or 1
+	local lp = GL(layer)
+	if (#lp>0) then
+		Layerfield = function (pos) --,lp,radius,falloff)
+			local sum = 0
+			for i=1,#lp do
+				local len = Length(Sub(pos,lp[i].pos)) --math.sqrt((pos[1]-lp[i][1])^2+(pos[2]-lp[i][2])^2+(pos[3]-lp[i][3])^2)
+				local fall = radius + falloff + lp[i].zoom
+				local gain = lp[i].zoom * 0.01
+				if (len < radius+fall) then
+					sum = sum + Smooth(len,radius,fall,gain,0)
+				end
+			end
+			return sum
+		end
+	end
+
+end
+
+MorphDotsOption = MorphDotsOption or {}
+local time = obj.time
+local offset = {offset[1]*time,offset[2]*time,offset[3]*time}
+scl = {scl[1],scl[2] or scl[1],scl[3] or scl[1]}
+scl = {scl[1]*obj.track0*0.01,scl[2]*obj.track0*0.01,scl[3]*obj.track0*0.01}
+local lac  = obj.track1*0.01
+local gain = obj.track2*0.01
+local amplitude = obj.track3
+local affect_pos = (afpos or 100)*0.01
+local affect_col = (afcol or 0)*0.01
+local affect_alp = (afalp or 0)*0.01
+local affect_zoom = (afzm or 0)*0.01
+if (gain==0) then oct=0 end
+MorphDotsOption.noise = {
+	offset,
+	scl,
+	oct,
+	lac,
+	gain,
+	glo,
+
+	amplitude = amplitude,
+	affect_pos = affect_pos,
+	affect_col = affect_col,
+	affect_alp = affect_alp,
+	affect_zoom = affect_zoom,
+	Layerfield = Layerfield
+}
+
+local fbm = require("noise").fbm
+Noisefbm = function(pos)
+	local x,y,z = (obj.x*glo+pos[1]-offset[1])*scl[1]*0.01,(obj.y*glo+pos[2]-offset[2])*scl[2]*0.01,(obj.z*glo+pos[3]-offset[3])*scl[3]*0.01
+	local nx = fbm(x+16,y+16,z+16,oct,lac,gain) * amplitude
+	local ny = fbm(x+32,y+32,z+32,oct,lac,gain) * amplitude
+	local nz = fbm(x+64,y+64,z+64,oct,lac,gain) * amplitude
+	return {nx,ny,nz}
+end
+
+if (fxs==1) then
+	local field = Layerfield({obj.x+obj.ox,obj.y+obj.oy,obj.z+obj.oz})
+	local x,y,z = (obj.x*glo+obj.ox-offset[1])*scl[1]*0.01,(obj.y*glo+obj.oy-offset[2])*scl[2]*0.01,(obj.z*glo+obj.oz-offset[3])*scl[3]*0.01
+	local nx = fbm(x+16,y+16,z+16,oct,lac,gain)
+	local ny = fbm(x+32,y+32,z+32,oct,lac,gain)
+	local nz = fbm(x+64,y+64,z+64,oct,lac,gain)
+	obj.ox = obj.ox + nx * affect_pos*amplitude
+	obj.oy = obj.oy + ny * affect_pos*amplitude
+	obj.oz = obj.oz + nz * affect_pos*amplitude
+	obj.alpha = Clamp(obj.alpha + math.max(-obj.alpha,math.min(1, affect_alp * nx * amplitude*0.01)))
+	obj.zoom = obj.zoom + math.max(-obj.zoom,math.min(math.abs(affect_zoom), affect_zoom * nx * amplitude*0.01))
+	-- amplitude = math.abs(amplitude)
+	-- local r0,g0,b0 = obj.getpixel(0,0,"rgb")
+	-- local r,g,b = (nx+1)*amplitude*1.28,(ny+1)*amplitude*1.28,(nz+1)*amplitude*1.28
+	-- local col = RGB(Clamp((r)*0.5,255),Clamp((g)*0.5,255),Clamp((b)*0.5,255))
+	-- obj.effect("グラデーション","強さ",(1+affect_col)*amplitude*100,"color",col,"color2",col,"blend",0)
+end
+--------------------------------------------------------------------------------
+@MorphDots [Depth]
+--track0:Focal,-1024,5000,0
+--track1:Ditance,0,3000,200
+--track2:Fade,0,5000,1024,0.01
+--track3:blur,0,100,10,1
+--check0:focuslock,0
+--dialog:lensblur/chk,local lens=0;FadeAlpha/chk,local fade=0;Fadezoom/chk,local zoomfade=0;amountNoise,local noise_amp=0;Far[dst/fade],local farfade={0,0};Near[dst/fade],local nearfade={0,0};layer,local layer=0;Effect(self)/chk,local fxs=0;
+--------------------------------------------------------------------------------
+MorphDotsOption = MorphDotsOption or {}
+
+local focalpoint,startfade,vanish,near_startfade,near_vanish,focusmode
+focalpoint	= obj.track0
+startfade 	= farfade[1] + obj.track1
+vanish 		= farfade[2] + obj.track2
+near_startfade = nearfade[1] + obj.track1
+near_vanish	= nearfade[2] + obj.track2
+focusmode = obj.check0
+local eps = 1e-6
+local function Clamp(x)
+	return (x<=0 and 0) or (x>=1 and 1) or x
+end
+local function Linear(t,a,b,A,B) return Clamp((t-a)/(b-a)) * (B-A)+A end
+local function Sub(a,b) return {a[1]-b[1],a[2]-b[2],a[3]-b[3]} end
+local function Scale(v,s) return {v[1]*s,v[2]*s,v[3]*s} end
+local function Length(v) return (v[1]*v[1]+v[2]*v[2]+v[3]*v[3])^.5 end
+local function Normalize(v) local l = math.max(eps,Length(v)); return {v[1]/l,v[2]/l,v[3]/l},l end
+local function Dot(a,b) return  (a[1]*b[1] + a[2]*b[2] + a[3]*b[3])  end
+local function Smooth(t,a,b,A,B) local v = Clamp((t-a)/(b-a)) return v*v*(3-2*v)*(B-A)+A end
+local gv = obj.getvalue
+local layer = layer or 0
+
+local function Gl(l)
+	l = ("layer"..l)
+	if gv(l..".x") then
+		return
+		{
+			pos   = {gv(l..".x"),gv(l..".y"),gv(l..".z")},
+			rot   = {gv(l..".rx"),gv(l..".ry"),gv(l..".rz")},
+			zoom  = gv(l..".zoom"),
+			alpha = gv(l..".alpha")
+		}
+	end
+	return false
+end
+
+local function Rot(v,rot)
+	local cosx,sinx = math.cos(rot[1]), math.sin(rot[1])
+	local cosy,siny = math.cos(rot[2]), math.sin(rot[2])
+	local cosz,sinz = math.cos(rot[3]), math.sin(rot[3])
+	local x,y,z = v[1],v[2],v[3]
+	x,y = (x*cosz - y*sinz),(x*sinz + y*cosz)
+	z,x = (z*cosy - x*siny),(z*siny + x*cosy)
+	y,z = (y*cosx - z*sinx),(y*sinx + z*cosx)
+	return {x,y,z}
+end
+
+local cam = obj.getoption("camera_param")
+local norm,len = Normalize({cam.tx-cam.x,cam.ty-cam.y,cam.tz-cam.z})
+local d = (focusmode) and (len + focalpoint) or (1024+focalpoint)
+local plane_point = Scale(norm,d) -- カメラ平面上の点
+
+local layerplane = Gl(layer)
+-- layerに有効なものが指定されたら平面をレイヤーにする
+if (layerplane) then
+	norm = Rot({0,0,-1}, Scale(layerplane.rot,math.pi/180) )
+	plane_point = Scale(Normalize(layerplane.pos),focalpoint)
+	cam.x,cam.y,cam.z = layerplane.pos[1],layerplane.pos[2],layerplane.pos[3]
+end
+
+local function Depth(pos)
+	local startfade,vanish = startfade,vanish -- スワップするのでローカル化
+	local pv = {(pos[1]+obj.x)-cam.x, (pos[2]+obj.y)-cam.y, (pos[3]+obj.z)-cam.z}
+	local depth = Dot(Sub(pv,plane_point),norm)
+	if (depth<0) then
+        	startfade,vanish = near_startfade,near_vanish
+	end
+	local D = (math.abs(depth)-startfade)/vanish
+	return {Clamp(D),D,Clamp(D*1.3)}
+end
+
+MorphDotsOption.Depth = Depth
+MorphDotsOption.alphafade = fade
+MorphDotsOption.zoomfade = zoomfade
+MorphDotsOption.alphapow = Linear(obj.track3,50,0,0.5,1)
+MorphDotsOption.alphaam =  Linear(obj.track3,10,50,0,1)
+MorphDotsOption.blur = (obj.track3)
+MorphDotsOption.blurmode = "ぼかし"
+if lens==1 then MorphDotsOption.blurmode = "レンズブラー" end
+MorphDotsOption.depth_amplitude = (noise_amp or 0)
+if (fxs==1) then
+	local pos = {obj.ox,obj.oy,obj.oz}
+	local r = Scale({obj.rx,obj.ry,obj.rz},math.pi/180)
+	local c = Scale({obj.cx,obj.cy,obj.cz},obj.getvalue("zoom")*0.01)
+	c = Rot(c,r)
+	local depth = Depth(Sub(pos,c))
+	obj.effect(MorphDotsOption.blurmode,"範囲",obj.track3*depth[1],"サイズ固定",0)
+	if (fade==1) then obj.alpha = obj.alpha * (1-depth[1]) end
+	if (zoomfade==1) then obj.zoom = obj.zoom * (1-depth[1]) end
+end
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+@MorphDots [Main]
+--track0:Progress,0,9000,0,0.01
+--track1:Scale,1,5000,100
+--track2:Random,-1000,1000,0
+--track3:Delay,0,1000,0,0.01
+--check0:Bordering,0
+--dialog:Shape/fig,local fig="円";└ [size/line],local figsize={8,100,"メイリオ","テ,キ,ス,ト"};Gap[w/h],local gap={8,  8};Order(0/7),local order=0;Ease(0/41),local ez=0;Orginalpos/chk,local orgpos=0;└ multiDraw,local mlt=0;DrawLine(0/2),local line=0;└ width,local line_w=1;└ [dist/fade],local fd={20,10};└ maxnum,local max=200;└ sortBydist/chk,local is_sort=0;
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+-- ダイアログに表示されていない設定
+		MorphDotsOption = MorphDotsOption or {}
+		MorphDotsOption.noise = MorphDotsOption.noise or {}
+		local alpha_thresholding = MorphDotsOption.alphabin or 0	-- 透明度二値化 (0/1)
+		local offset_border = MorphDotsOption.offset_border or 3	-- 輪郭線の色取得位置の調整 (pixel内側にずらす)
+		local thin_border = MorphDotsOption.thin_border or 0		-- 輪郭線の位置の調整
+		local rotation 	= MorphDotsOption.rot or 0			-- 個別オブジェクト全体の回転をする (0/1)
+		local alternate = MorphDotsOption.alternate or 1		-- 交互のずれを発生させる (0/1)
+		local shuffle_index = MorphDotsOption.indexshuffle or 0		-- obj.indexのシャッフル (0/1)
+		local billboard3 = MorphDotsOption.billboard or 3
+		local z_num = MorphDotsOption.z_num or 0
+		local z_rot = MorphDotsOption.z_rot or 0
+		local extrude = MorphDotsOption.extrude or 0
+		local randcolor = MorphDotsOption.randcolor or {0,0,0}
+		-- NoiseSettiongs --------------------------------------------------------------
+		local time = obj.time*10
+		local offset = MorphDotsOption.noise[1] or {time,time,time}
+		local scl_n  = MorphDotsOption.noise[2] or {0.8,0.8,0.8}	-- nosieScale 		ノイズ周期 {x,y,z},値が大きいと細かくなる
+		local oct    = MorphDotsOption.noise[3] or 1     		-- octaves    		細かいノイズを乗算する数 (整数指定)
+		local lac    = MorphDotsOption.noise[4] or 1	 		-- lacunarity 		乗算するノイズの細かさ
+		local gain   = MorphDotsOption.noise[5] or 0.35  		-- gain (octaves) 	乗算するノイズのゲイン (1以下)
+		local glo    = MorphDotsOption.noise[6] or 1	 		-- globalposition	ノイズ空間設定 (0/1)
+		local noise_amplitude = MorphDotsOption.noise.amplitude or 0
+		local Layerfield = MorphDotsOption.noise.Layerfield or function() return 1 end
+		local affect_pos = MorphDotsOption.noise.affect_pos or 0
+		local affect_col = MorphDotsOption.noise.affect_col or 0
+		local affect_alp = MorphDotsOption.noise.affect_alp or 0
+		local affect_zoom = MorphDotsOption.noise.affect_zoom or 0
+		local do_noise = (affect_pos ~= 0) or (affect_col ~=0) or (affect_alp ~=0)
+		-- Depthsetting ----------------------------------------------------------------
+		local Depth = MorphDotsOption.Depth or function(v) return {0,0,0} end
+		local alphafade = MorphDotsOption.alphafade or 0
+		local zoomfade = MorphDotsOption.zoomfade or 0
+		local alphapow = MorphDotsOption.alphapow or 1
+		local alphaam = MorphDotsOption.alphaam or 0
+		local blur = MorphDotsOption.blur or 0
+		local blurmode = MorphDotsOption.blurmode or "ぼかし"
+		local depth_amplitude = MorphDotsOption.depth_amplitude or 0
+-- Dialog ----------------------------------------------------------------------
+
+
+local easelist = {
+		[0] = "linear",
+    "linear",                                               -- 1
+    "inSine",   "outSine",   "inOutSine",   "outInSine",    -- 2,3,4,5
+    "inQuad",   "outQuad",   "inOutQuad",   "outInQuad",    -- 6,7,8,9
+    "inCubic",  "outCubic",  "inOutCubic",  "outInCubic",   -- 10,11,12,13
+    "inQuart",  "outQuart",  "inOutQuart",  "outInQuart",   -- 14,15,16,17
+    "inQuint",  "outQuint",  "inOutQuint",  "outInQuint",   -- 18,19,20,21
+    "inExpo",   "outExpo",   "inOutExpo",   "outInExpo",    -- 22,23,24,25
+    "inCirc",   "outCirc",   "inOutCirc",   "outInCirc",    -- 26,27,28,29
+    "inElastic","outElastic","inOutElastic","outInElastic", -- 30,31,32,33
+    "inBack",   "outBack",   "inOutBack",   "outInBack",    -- 34,35,36,37
+    "inBounce", "outBounce", "inOutBounce", "outInBounce"   -- 28,39,40,41
+}
+
+if not package.loaded.easing then
+	pcall(require,"easing")
+end
+local Ease = package.loaded.easing
+
+local easetype = tostring(ez)
+if (easetype == ez) then
+	if ez:find("[iol]")==1 then
+		easetype = ez
+	else
+		easetype = easelist[tonumber(ez)]
+	end
+else
+	easetype = easelist[ez]
+end
+
+if not tostring(gap):find("table:") then gap={gap} end
+local dw,dh = gap[1],gap[2] or gap[1]
+dw,dh = math.max(1,dw),math.max(1,dh)
+
+if not tostring(order):find("table:") then order={order,order} end
+local ord0,ord1 = order[1], order[2] or order[1]
+
+if fig=="背景" then fig="円" end
+if fig=="六角形" and alternate==1 then dh = dh*0.866 end
+local figzoom = 1.5
+if fig=="四角形" then figzoom = 1 end
+local figline = 1000
+local loadtext = 0
+local font = ""
+local Text = function() return end
+if tostring(figsize):find("table:") then
+	if tostring(figsize[2]):lower():find("t") then
+		-- http://handasse.blogspot.com/2010/02/lua.html
+		local function split(str, del)
+			if str=="" then return {""} end
+			del = del or "[,%s]"
+			local p, nrep = str:gsub("%s*"..del.."%s*", "")
+			return { str:match((("%s*(.-)%s*"..del.."%s*"):rep(nrep).."(.*)")) }
+		end
+		loadtext = 1
+		font = figsize[3] or "メイリオ"
+		local str = figsize[4]
+		if str then
+			if tostring(str)==str then
+				str = split(str)
+			 end
+			Text = function(i) return str[i%(#str)+1] end
+		else
+			Text = function(i) return string.char(obj.rand(32,126,-93,i)) end
+		end
+		figsize = figsize[1]
+		if font~="" then
+			obj.setfont(font,figsize)
+		else
+			obj.setfont(font,figsize)
+		end
+	else
+		figline = (figsize[2]=="") and 1000 or figsize[2] or 1000
+		figsize=figsize[1]
+	end
+end
+
+-- TrackSettings ---------------------------------------------------------------
+
+local Kb = 1.70158
+local progress  = obj.track0*0.01
+local scl 		= obj.track1*0.01
+local delay 	= obj.track3*0.001
+local amount 	= obj.track2
+local offsetborder = offsetborder or 0
+
+-- LineSettings ----------------------------------------------------------------
+
+line = math.min(2,(line or 0))
+max = max or 4
+local dst = dw<4 and 2 or 0
+local auto_dist = (fd and false) or true
+fd = fd or {(dw+dst)*scl*1.414,dh/2*scl}
+local line_w,st,va,st_,va_ = line_w,fd[1],(fd[2] or 1),1,0
+
+-- Function --------------------------------------------------------------------
+local function Add(a,b) return {a[1]+b[1],a[2]+b[2],a[3]+b[3]} end
+local function Sub(a,b) return {a[1]-b[1],a[2]-b[2],a[3]-b[3]} end
+local function Scale(v,s) return {v[1]*s,v[2]*s,v[3]*s} end
+local function Mul(a,b) return {a[1]*b[1],a[2]*b[2],a[3]*b[3]} end
+local function Length(v) return (v[1]*v[1]+v[2]*v[2]+v[3]*v[3])^.5 end
+local function Normalize(v) local l=1/Length(v); return {v[1]*l,v[2]*l,v[3]*l} end
+local function Cross(a,b) return  {a[2]*b[3]-a[3]*b[2],a[3]*b[1]-a[1]*b[3],a[1]*b[2]-a[2]*b[1]} end
+local function Dot(a,b) return  (a[1]*b[1] + a[2]*b[2] + a[3]*b[3])  end
+
+local function Shuffle_tbl(t,seed)
+	local count = #t
+	math.randomseed(seed or 0)
+	local j
+	for i = count,2,-1 do
+		j = math.random(i)
+		t[i], t[j] = t[j], t[i]
+	end
+	return t
+end
+
+local function Clamp(v,max)
+	max = (max or 1)
+	return (v <= 0 and 0) or (v >= max and max) or v
+end
+
+local function Clamp_vec(v,max)
+ return {Clamp(v[1],max),Clamp(v[2],max),Clamp(v[3],max)}
+end
+
+local function Linear(t,a,b,A,B)
+	return Clamp((t-a)/(b-a),1) * (B-A)+A
+end
+
+local function Io(v)
+	return -(math.cos(math.pi*2*v)-1)*0.5
+end
+
+function Sequence(t,delay,i,i_max) 	-- i = [0 ~ i_max-1]
+	if (delay == 0) then return t end
+    if (t < 0) then t,i = -t,i_max-i end
+    local life = 1+(delay*(i_max))
+    return Clamp(t*life - delay*i, 1)
+end
+
+local function Spl(v)
+	if not tostring(v):find("table:") then v = {v,v,v} end
+	return {v[1],v[2] or v[1],v[3] or v[1]}
+end
+
+local function Lerp(t,a,b)
+	return a + (b-a)*t
+end
+
+local function Lerp_vec(t,a,b)
+	return	{Lerp(t,a[1],b[1]),Lerp(t,a[2],b[2]),Lerp(t,a[3],b[3])}
+end
+
+local function Lerp_param(t,a,b)
+	local k = (1-t)
+	return
+	{
+	(1-t)*a[1] + t*b[1],-- z
+	(1-t)*a[2] + t*b[2],-- y
+	(1-t)*a[3] + t*b[3],-- z
+	(1-t)*a[4] + t*b[4],-- r
+	(1-t)*a[5] + t*b[5],-- g
+	(1-t)*a[6] + t*b[6],-- b
+	Lerp(math.min(1,t*2),a[7],b[7]),-- alpha
+	(1-t)*a[8] + t*b[8], --luminanc
+	(1-t)*a[9] + t*b[9] --rz
+	}
+end
+
+local RAD = math.pi/180
+local rot =  {obj.getvalue("rx"),obj.getvalue("ry"),obj.getvalue("rz")}
+local rot_ =  {obj.rx,obj.ry,obj.rz}
+--rot,rot_ = rot_,rot
+local cosx,sinx = math.cos(rot[1]*RAD), math.sin(rot[1]*RAD)
+local cosy,siny = math.cos(rot[2]*RAD), math.sin(rot[2]*RAD)
+local cosz,sinz = math.cos(rot[3]*RAD), math.sin(rot[3]*RAD)
+local function Rotv(v)
+	local x,y,z = v[1],v[2],v[3]
+	x,y = (x*cosz - y*sinz),(x*sinz + y*cosz)
+	z,x = (z*cosy - x*siny),(z*siny + x*cosy)
+	y,z = (y*cosx - z*sinx),(y*sinx + z*cosx)
+	return {x,y,z}
+end
+local Rotv_ = Rotv
+if rotation==0 then
+	local cosx_,sinx_ = math.cos(rot_[1]*RAD), math.sin(rot_[1]*RAD)
+	local cosy_,siny_ = math.cos(rot_[2]*RAD), math.sin(rot_[2]*RAD)
+	local cosz_,sinz_ = math.cos(rot_[3]*RAD), math.sin(rot_[3]*RAD)
+	Rotv_ = function(v)
+		local x,y,z = v[1],v[2],v[3]
+		x,y = (x*cosz_ - y*sinz_),(x*sinz_ + y*cosz_)
+		z,x = (z*cosy_ - x*siny_),(z*siny_ + x*cosy_)
+		y,z = (y*cosx_ - z*sinx_),(y*sinx_ + z*cosx_)
+		return {x,y,z}
+	end
+end
+
+local function Rand(seed,frame)
+	return {
+		obj.rand(-1000,1000,16+seed,frame+100)*0.001,
+		obj.rand(-1000,1000,32+seed,frame+200)*0.001,
+		obj.rand(-1000,1000,64+seed,frame+300)*0.001
+	}
+	-- math.randomseed(seed)
+	-- return {(math.random()-0.5)*2,(math.random()-0.5)*2,(math.random()-0.5)*2}
+end
+
+local Fbm = require("noise").fbm
+local ox,oy,oz = (obj.x+obj.ox),(obj.y+obj.oy),(obj.z+obj.oz)
+local function Noise(v,scl,offset,oct,lac,gain,glo,id)
+	scl = Scale(Spl(scl),0.01)
+	offset = Spl(offset)
+	offset = Mul(offset,scl)
+	local x = (v[1]+ox*glo) * scl[1]
+	local y = (v[2]+oy*glo) * scl[2]
+	local z = (v[3]+oz*glo) * scl[3]
+	return
+	{
+		Fbm(x   -offset[1], y   -offset[2], z   -offset[3], oct,lac,gain),
+		Fbm(x+8 -offset[1], y+8 -offset[2], z+8 -offset[3], oct,lac,gain),
+		Fbm(x+16-offset[1], y+16-offset[2], z+16-offset[3], oct,lac,gain)
+	}
+end
+--table.sort用比較関数
+local Sortd = {
+	 [1] = function(a,b) return (a[1])<(b[1]) end, -- x
+	 [2] = function(a,b) return (a[2])<(b[2]) end, -- y
+	 [3] = function(a,b) return (a[8])<(b[8]) end, -- luminance
+	 [4] = function(a,b) return (a[4])<(b[4]) end, -- r
+	 [5] = function(a,b) return (a[5])<(b[5]) end, -- g
+	 [6] = function(a,b) return (a[6])<(b[6]) end, -- b
+
+	[-1] = function(a,b) return (a[1])>(b[1]) end,
+	[-2] = function(a,b) return (a[2])>(b[2]) end,
+	[-3] = function(a,b) return (a[8])>(b[8]) end,
+	[-4] = function(a,b) return (a[4])>(b[4]) end,
+	[-5] = function(a,b) return (a[5])>(b[5]) end,
+	[-6] = function(a,b) return (a[6])>(b[6]) end
+}
+
+local cam = obj.getoption("camera_param")
+-- width,alp,col の三つはテーブルで二要素必要
+local function Polyline(p0,p1,width,alp,col,st,va,st_n,va_n,progress)
+	alp[2] = alp[2] or alp[1]
+	width[2] = width[2] or width[1]
+	width = {math.max(0.0,width[1]*0.5),math.max(0.0,width[2]*0.5)}
+	st,va,st_n,va_n = st or 1000, va or 2000,st_n or 1 ,va_n or 0
+	st_n = math.min(st,st_n)
+	va_n = math.max(0,math.min(st_n-1,va_n))
+	local vc = Sub(p1,p0)
+	local len = Length(vc)
+	if len>(st+va) then return 0,p1 end
+	if len<(va_n) then return 0,p1 end
+	local lin = Linear(len,st,st+va,1,0)*Linear(len,st_n,va_n,1,0)
+	local n = Normalize( Cross(vc,{cam.x-p0[1], cam.y-p0[2], cam.z-p0[3]}) )
+	n = Scale(n,lin)
+	local nr = Scale(n,width[1])
+	local nl = Scale(n,width[2])
+	if (progress<0) then
+		p1 = Lerp_vec(Clamp(progress+1),p0,p1)
+	elseif (progress>0) then
+		p0 = Lerp_vec(Clamp(progress),p0,p1)
+	end
+	local u,v = 0,0
+	if (#col==1) then
+		obj.putpixel(0,0,col[1],alp[1]*lin)
+	else
+		u,v = 2,2
+		obj.putpixel(0,0,col[1],alp[1]*lin)
+		obj.putpixel(1,0,col[2],alp[2]*lin)
+		obj.putpixel(1,1,col[2],alp[2]*lin)
+		obj.putpixel(0,1,col[1],alp[1]*lin)
+	end
+	obj.drawpoly(
+		p0[1]-nr[1],p0[2]-nr[2],p0[3]-nr[3],
+		p1[1]-nl[1],p1[2]-nl[2],p1[3]-nl[3],
+		p1[1]+nl[1],p1[2]+nl[2],p1[3]+nl[3],
+		p0[1]+nr[1],p0[2]+nr[2],p0[3]+nr[3],
+		0,0,u,0,u,v,0,v,math.min(1,alp[1])
+	)
+	return 1,p1
+end
+
+-- Main ------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+MorphDots= MorphDots or {}
+if (obj.index==0) then
+	MorphDots[obj.layer] = {}
+	MorphDots[obj.layer].cache = {}
+end
+local index = obj.index
+if (shuffle_index>0) then
+	local ind = {}
+	for i=1,obj.num do
+		ind[i] = i-1
+	end
+	Shuffle_tbl(ind,shuffle_index)
+	index = ind[obj.index+1]
+end
+
+MorphDots[obj.layer][index+1] = {}
+MorphDots[obj.layer][index+1].border = {}
+
+local w,h = obj.getpixel()
+local zm = obj.getvalue("zoom")*0.01
+local ox,oy,oz = obj.ox*orgpos*scl,obj.oy*orgpos*scl,obj.oz*orgpos*scl
+local oxyz = {ox,oy,oz,obj.cx,obj.cy,obj.cz}
+if (rotation==1) then
+	ox,oy,oz = unpack( Rotv({ox,oy,oz}) )
+end
+local cxyz = Rotv({obj.cx*zm,obj.cy*zm,obj.cz})
+ox,oy,oz = ox-cxyz[1],oy-cxyz[2],oz-cxyz[3]
+
+if not (obj.check0) then
+	local tmp = {}
+	local I=0
+	for i=0,w-1,dw do
+		I=I+1
+		tmp[I]={}
+		local J=0
+		for j=0,h-1,dh do
+			J=J+1
+			local alt = (dw/2 * (((j/dh)%2)-0.5)) * alternate
+			local r,g,b,a=obj.getpixel(math.min(w-1,i+alt),j,"rgb")
+			local l = (0.298912*r + 0.586611*g + 0.114477*b)/255
+			if not a then a=0 end
+			a = (alpha_thresholding == 1) and 255 or a
+			tmp[I][J]={
+				(i+alt - w/2)*scl,(j - h/2)*scl,0, -- x,y,z
+				r/255,g/255,b/255,                 -- r,g,b
+				a/255*obj.alpha,                   -- alpha
+				l,                                 -- luminance
+				0
+			}
+		end
+	end
+	local rotz = math.pi/180 * z_rot
+	for k=0,z_num do
+		for i=1,#tmp do
+			for j=1,#tmp[i] do
+				if (tmp[i][j][7]>0) then
+					local P = tmp[i][j]
+					local v = Rotv_({P[1]+ox*rotation,P[2]+oy*rotation,(k * extrude)- (extrude * z_num/2)+oz*rotation})
+					local sinz,cosz = math.sin(rotz*k),math.cos(rotz*k)
+					local x,y =(v[1]*cosz - v[2]*sinz),(v[1]*sinz + v[2]*cosz)
+					table.insert(MorphDots[obj.layer][index+1],{x+ox*(1-rotation),y+oy*(1-rotation),v[3]+oz*(1-rotation),P[4],P[5],P[6],P[7],P[8],P[9]})
+				end
+			end
+		end
+	end
+	if #MorphDots[obj.layer][index+1]==0 then MorphDots[obj.layer][index+1][1] = {0,0,0, 0,0,0, 0,0,0} end
+
+end
+
+if (obj.check0) then
+	require("rikky_module")
+	-- エッジ抽出やアルファノイズ等をこのアニメーション効果より下につけると色付きの輪郭線になる
+	obj.copybuffer("tmp","obj")
+	obj.effect()
+	local border = rikky_module.bordering(dw-1)
+	obj.copybuffer("obj","tmp")
+	local w2,h2=w/2,h/2
+	-- 輪郭が小さい順にする
+	-- table.sort(border,function(a,b) return #a<#b end)
+	local border_rotate =  0
+	local tmp = {}
+	for i=1,#border do
+		tmp[i]={}
+		local jn=#border[i]/2
+		for j=1,jn do
+			local jj,jc = math.modf(((j+border_rotate)%(jn)+1))
+			local x,y = border[i][jj*2-1]+w2, border[i][jj*2]+h2
+			-- 輪郭から少し内側でないとうまく色が取れないので法線方向に数ピクセル移動
+			local x0,y0 = x,y
+			local x1,y1 = border[i][(jj%jn+1)*2-1]+w2, border[i][(jj%jn+1)*2]+h2
+			local vx,vy = x0-x1, y0-y1
+			local rz = math.deg(math.atan2(vy,vx))
+			local len = math.max(0.00001,math.sqrt(vx*vx+vy*vy)) -- 点の間隔はborderingの引数+1pixelとは限らない
+			vx,vy = (vx/len), (vy/len)
+			local r,g,b,a = obj.getpixel(x0-vy*offset_border,y0+vx*offset_border,"rgb")
+			-- 透明だった場合は反対側の可能性
+			if (a==0) then
+				local vx,vy = -vx,-vy
+				r,g,b,a = obj.getpixel(x0-vy*offset_border,y0+vx*offset_border,"rgb")
+			end
+			if not a then a=0 end
+			a = (alpha_thresholding == 1) and 255 or a
+			local l = (0.298912*r + 0.586611*g + 0.114477*b)/255
+			tmp[i][j]={
+				(x-vy*thin_border - w/2)*scl,(y+vx*thin_border - h/2)*scl,0,
+				r/255,g/255,b/255,
+				a/255*obj.alpha,
+				l,
+				rz
+			}
+		end
+		-- ループしておく
+		-- table.insert(tmp[i],tmp[i][1])
+	end
+
+	local rotz = math.pi/180 * z_rot
+--[[
+	local face = {} -- ポリゴン用
+	for k=0,z_num do
+		local sinz,cosz = math.sin(rotz*k),math.cos(rotz*k)
+		face[k+1] = {}
+		for i=1,#tmp do
+			face[k+1][i] = {}
+			for j=1,#tmp[i] do
+					if (tmp[i][j][7]>0) then
+						local P = tmp[i][j]
+						local v = Rotv_({P[1]+ox*rotation,P[2]+oy*rotation,(k * extrude)- (extrude * z_num/2)+oz*rotation})
+						local x,y =(v[1]*cosz - v[2]*sinz),(v[1]*sinz + v[2]*cosz)
+						face[k+1][i][j] = {x+ox*(1-rotation),y+oy*(1-rotation),v[3]+oz*(1-rotation),P[4],P[5],P[6],P[7],P[8],P[9]}
+				end
+			end
+		end
+	end
+	]]
+
+	for k=0,z_num do
+		for i=1,#tmp do
+			for j=1,#tmp[i] do
+				if (tmp[i][j][7]>0) then
+					local P = tmp[i][j]
+					local v = Rotv_({P[1]+ox*rotation,P[2]+oy*rotation,(k * extrude)- (extrude * z_num/2)+oz*rotation})
+					local sinz,cosz = math.sin(rotz*k),math.cos(rotz*k)
+					local x,y =(v[1]*cosz - v[2]*sinz),(v[1]*sinz + v[2]*cosz)
+					table.insert(MorphDots[obj.layer][index+1],{x+ox*(1-rotation),y+oy*(1-rotation),v[3]+oz*(1-rotation),P[4],P[5],P[6],P[7],P[8],P[9]})
+				end
+			end
+		end
+	end
+	if #MorphDots[obj.layer][index+1]==0 then MorphDots[obj.layer][index+1][1] = {0,0,0, 0,0,0, 0,0,0} end
+end
+
+--オリジナル画像の描画
+obj.alpha = MorphDotsOption.alphablend or 0.0
+obj.ox,obj.oy,obj.oz = ox,oy,oz
+obj.zoom = scl
+obj.cx,obj.cy,obj.cz = 0,0,0
+--32~47--48~57--58~64--65~122--123~126
+
+if (obj.index==obj.num-1) then
+	if (obj.alpha>0) then obj.effect() obj.draw() end
+	local count = 0
+	local Kn = math.min(obj.num-1,mlt)
+	local id,t=0,0
+	for K=0,Kn do
+		id,t = math.modf(progress+K)
+		local t0,t1,index
+		t0 = MorphDots[obj.layer][id%obj.num+1]
+		t1 = MorphDots[obj.layer][(id+1)%obj.num+1]
+		local n0 = #t0
+		local n1 = #t1
+		if (#t0 ~= #t1) then
+			if (n0 < n1) then
+				for i=n0+1,n1 do
+					table.insert(t0, {t1[i][1],t1[i][2],t1[i][3],t1[i][4],t1[i][5],t1[i][6],0,t1[i][8],t1[i][9]})
+				end
+			else
+				for i=n1+1,n0 do
+					table.insert(t1, {t0[i][1],t0[i][2],t0[i][3],t0[i][4],t0[i][5],t0[i][6],0,t0[i][8],t0[i][9]})
+				end
+			end
+		end
+
+		if (ord0~=0) then
+			if (math.abs(ord0)<7) then
+				table.sort(t0,Sortd[ord0])
+			else
+				Shuffle_tbl(t0,math.abs(ord0))
+			end
+		end
+
+		if (ord1~=0) then
+			if (math.abs(ord1)<7) then
+				table.sort(t1,Sortd[ord1])
+			else
+				Shuffle_tbl(t1,math.abs(ord1))
+			end
+		end
+
+		local nt = {}
+		local num = #t0
+		obj.setoption("billboard",billboard3)
+		math.randomseed(K)
+		for i=1,num do
+			count = count + 1
+			local t = Sequence(t,delay,i-1,num-1)
+			local te = t
+			if (Ease) then
+				te = Ease[easetype](t,0,1,1)
+			end
+			local inout = Io(te)
+			local tmp = t0[i]
+			local noi = {0,0,0}
+			if (amount>0) then
+				local tmp0 = t0[i]
+				local tmp1 = t1[i]
+				local p0 = Add(tmp0,Scale({(math.random()-0.5)*2,(math.random()-0.5)*2,(math.random()-0.5)*2},inout*amount))
+				local p1 = Add(tmp1,Scale({(math.random()-0.5)*2,(math.random()-0.5)*2,(math.random()-0.5)*2},inout*amount))
+				tmp = Lerp_param(te,
+					{p0[1],p0[2],p0[3],tmp0[4],tmp0[5],tmp0[6],tmp0[7],tmp0[8],tmp0[9]},
+					{p1[1],p1[2],p1[3],tmp1[4],tmp1[5],tmp1[6],tmp1[7],tmp1[8],tmp1[9]}
+				)
+			else
+				tmp = Lerp_param(te,t0[i],t1[i])
+			end
+			local pos = {tmp[1],tmp[2],tmp[3]}
+			local rgb = {tmp[4],tmp[5],tmp[6]}
+			local alpha,lum,rz,zoom = tmp[7],tmp[8],tmp[9],1
+			local depth = {0,0,0}
+			if (do_noise) or (amount<0) then
+				noi = Noise(pos,scl_n,offset,oct,lac,gain,glo,id)
+				noi = Sub(noi,Noise(Add(pos,{10.5,20.5,30.5}),Scale(scl_n,1.2),offset,0,0,0,glo,id))
+			end
+			pos = Add(pos,Scale(noi,inout*amount))
+			local field = Layerfield(pos)
+			local noise_amplitude = noise_amplitude
+			if (depth_amplitude>0) then
+				depth = Depth(pos)
+				noise_amplitude = noise_amplitude + Clamp(depth[2],depth_amplitude*0.01)*depth_amplitude
+			end
+			pos = Add(pos,Scale(noi,noise_amplitude * field * affect_pos ))
+
+			local depth = Depth(pos)
+
+			-- Noise Color
+			rgb = Lerp_vec(inout, rgb, Add(rgb ,Scale(noi,inout*amount*randcolor[1] ))  )
+			rgb = Add(rgb,Scale(noi,noise_amplitude/255 * field * affect_col))
+			  -- rgb = Lerp_vec(inout,rgb, Mul(randcolor,Add(rgb,Scale(noi,inout*amount))))
+			  -- rgb = Lerp_vec(inout,rgb, Add(rgb,Scale(Mul(randcolor,noi),inout*amount)))
+			local r,g,b = Clamp(rgb[1],1)*255,Clamp(rgb[2],1)*255,Clamp(rgb[3],1)*255
+			local col = RGB(r,g,b)
+
+			-- Noise Alpha
+			alpha = alpha + math.max(-1,math.min(( (noi[1]+noi[2]/2+noi[3]/4)*0.5714 * noise_amplitude*0.01 * affect_alp),0))
+			alpha = (1-depth[3]*alphafade)*alpha
+
+			-- Noise Zoom
+			zoom = zoom + math.max(-1,math.min(noi[1] * noise_amplitude*0.01 * affect_zoom, math.max(affect_zoom-1,1)))
+
+			if (loadtext==1) then
+				rikky_module.textload( ("<#%02x%02x%02x>"):format(r,g,b)..Text(i))
+				-- rikky_module.textload( string.format(("<#%02x%02x%02x>"),r,g,b)..Text(i))
+			else
+				obj.load("figure",fig,col,figsize*figzoom,figline)
+			end
+			obj.cx,obj.cy,obj.cz = 0,0,0
+
+			local blurd_alpha = 1
+			if (alpha>0) then
+				obj.effect(blurmode,"範囲",blur*depth[1],"サイズ固定",0)
+				blurd_alpha = Linear( blur*depth[1], 0,math.max(5,figsize)*1.5,1,0.4)
+			end
+			zoom = zoom * (1-depth[1]*zoomfade)
+			obj.draw(pos[1],pos[2],pos[3], 1/figzoom * zoom ,alpha,-rot[1],-rot[2],-rot[3]+rz*1)
+			alpha = blurd_alpha*alpha
+			alpha = Lerp(alphaam,alpha,alpha*(1-(depth[1])^alphapow))
+			nt[i]={pos[1],pos[2],pos[3], r,g,b,alpha,lum,zoom=zoom,col=col}
+		end
+		local lineprog = MorphDotsOption.lineprog or 0
+		local linedelay = MorphDotsOption.linedelay or 0
+		local lineshuffle = MorphDotsOption.lineshuffle or 1
+		obj.setoption("antialias",(antialias or 1))
+		if (line>0) and (lineprog>-1) and (lineprog<1) then
+			obj.load("figure","四角形",1,2)
+			obj.setoption("billboard",0)
+			obj.rx,obj.ry,obj.rz = 0,0,0
+			obj.cx,obj.cy,obj.cz = 0,0,0
+			if (max==1) then
+				local tmp = {}
+				for i=1,#nt do
+					local j = i%(#nt)+1
+					local width = {line_w, line_w}
+					local alp = {nt[i][7] * nt[j][7],1}
+					local col = {nt[i].col}
+					if (line>1) then
+						width = {line_w*nt[i].zoom,line_w*nt[j].zoom}
+						col = {nt[i].col,nt[j].col}
+						alp = {nt[i][7],nt[j][7]}
+					elseif blur>0 then
+						width = {line_w*nt[i].zoom,line_w*nt[j].zoom}
+						alp = {nt[i][7],nt[j][7]}
+					end
+					tmp[i] = {nt[i],nt[j],width,alp,col}
+				end
+				-- if (lineshuffle==1) then
+				-- 	tmp = Shuffle_tbl(tmp,1)
+				-- end
+				for i=1,#tmp do
+					local t = 0
+					local alp = tmp[i][4]
+					if (lineprog<0) then
+						t = Sequence(lineprog+1,linedelay,i-1,#tmp-1) - 1
+					else
+						t = Sequence(lineprog,linedelay,i-1,#tmp-1)
+					end
+					Polyline(tmp[i][1],tmp[i][2],tmp[i][3],tmp[i][4],tmp[i][5],st,va,st_,va_,t,cam)
+				end
+
+			else -- (max>1)
+
+				local tmp = {}
+				for i=1,#nt do
+					local jn=1
+					for j=i+1,#nt do
+						if (jn>max) then break end
+						local len = Length(Sub(nt[i],nt[j]))
+						if (len < st+va) then
+							jn = jn+1
+							local width = {line_w, line_w}
+							local alp = {nt[i][7] * nt[j][7],nt[i][7] * nt[j][7]}
+							local col = {nt[i].col}
+							if (line>1) then
+								width = {line_w*nt[i].zoom,line_w*nt[j].zoom}
+								col = {nt[i].col,nt[j].col}
+								alp = {nt[i][7],nt[j][7]}
+							elseif blur>0 then
+								width = {line_w*nt[i].zoom,line_w*nt[j].zoom}
+							end
+							table.insert(tmp,{nt[i],nt[j],width,alp,col,len})
+						end
+					end
+				end
+				--if (lineshuffle==1) then
+					--tmp = Shuffle_tbl(tmp,1)
+				--end
+				if (is_sort==1) then
+					table.sort(tmp,function(a,b) return a[6]<b[6] end)
+				end
+
+				for i=1,#tmp do
+					local t = 0
+					local alp = tmp[i][4]
+					if (lineprog<0) then
+						t = Sequence(lineprog+1,linedelay,i-1,#tmp-1)
+						t = t*t
+						alp = {Lerp(t,alp[1],alp[2])*t,Lerp(t,alp[1],alp[2])*t}
+						t = t-1
+					else
+						t = Sequence(lineprog,linedelay,i-1,#tmp-1)
+						local t0 = Linear(t,0,1,1,0)^2
+						alp = {alp[2]*t0,alp[2]*t0}
+					end
+					Polyline(tmp[i][1],tmp[i][2],tmp[i][3],alp,tmp[i][5],st,va,st_,va_,t,cam)
+				end
+
+			end
+
+		end
+	end
+	MorphDots[obj.layer] = nil
+	MorphDotsOption = {}
+end
